@@ -46,31 +46,42 @@ input[type="file"] { font-family: var(--font-ui); font-size: 0.9rem; color: var(
 
 
 
-.upload-section {
-
+.upload-section { 
   transition: all 0.2s ease-in-out;
-
-  border: 2px dashed transparent; /* Persiapan untuk border putus-putus */
-
-  padding: 2rem;
-
+  border: 2px dashed var(--border-color); /* Border selalu terlihat */
+  background-color: var(--bg-page);
+  padding: 3rem 2rem; 
+  display: flex; 
+  flex-direction: column; /* Mengubah jejeran dari horizontal ke vertikal */
+  align-items: center; /* Meratakan semua ke tengah */
+  justify-content: center;
+  gap: 1.5rem; /* Jarak antar elemen */
   border-radius: 8px;
-
+  text-align: center;
 }
-
-
 
 .upload-section.dragging {
-
-  border-color: #007bff; /* Warna biru saat file diseret ke atas area */
-
-  background-color: rgba(0, 123, 255, 0.05);
-
+  border-color: var(--accent);
+  background-color: rgba(194, 65, 12, 0.04); /* Warna oranye/merah sangat transparan */
   transform: scale(1.02);
-
 }
 
+.drag-drop-text {
+  font-family: var(--font-ui);
+  font-size: 1.1rem;
+  color: var(--text-muted);
+}
 
+.file-selected {
+  color: var(--text-main);
+}
+
+input[type="file"] { 
+  font-family: var(--font-ui); 
+  font-size: 0.95rem; 
+  color: var(--text-muted); 
+  cursor: pointer;
+}
 
 button { display: inline-flex; align-items: center; gap: 0.5rem; background-color: var(--text-main); color: var(--bg-page); font-family: var(--font-ui); font-weight: 500; font-size: 0.9rem; border: none; padding: 0.6rem 1.2rem; cursor: pointer; transition: background-color 0.15s ease; }
 

@@ -120,8 +120,12 @@ function App() {
           onDrop={handleDrop}
         >
           {/* Teks bantuan untuk area Drag & Drop */}
-          <div className="drag-drop-text" style={{ marginBottom: '15px', fontWeight: 'bold' }}>
-            {file ? `File terpilih: ${file.name}` : "Tarik & lepas file ke sini, atau klik tombol di bawah"}
+          <div className="drag-drop-text">
+            {file ? (
+              <span className="file-selected">Selected file: <strong>{file.name}</strong></span>
+            ) : (
+              "Drag & drop your document here, or use the button below"
+            )}
           </div>
 
           <input 
