@@ -23,12 +23,22 @@ app.add_middleware(
 # Initialize MarkItDown instance
 md = MarkItDown()
 
+# Batas maksimal file adalah 10 MB (10 * 1024 * 1024 bytes)
+MAX_FILE_SIZE = 10_485_760
+
 @app.post("/api/convert")
 async def convert_document(file: UploadFile = File(...)):
     """
     Receives an uploaded file, saves it temporarily, 
     converts it to Markdown, and returns the string content.
     """
+    # 1. Pengecekan ukuran file
+    if file.size and file.size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"File terlalu besar. Maksimal ukuran file adalah 10MB. File Anda: {file.size / 1_048_576:.2f}MB"
+        )
+
     temp_file_path = f"temp_{file.filename}"
     
     try:
