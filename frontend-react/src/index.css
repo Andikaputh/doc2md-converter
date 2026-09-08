@@ -166,3 +166,38 @@ svg.icon { width: 16px; height: 16px; }
     grid-template-columns: 1fr;
   }
 }
+
+/* Custom Error Banner */
+.error-banner {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  background-color: #fdf2f2;
+  border: 1px solid #f8b4b4;
+  color: #9b2c2c;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.error-close {
+  background: transparent;
+  border: none;
+  color: #9b2c2c;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.error-close:hover {
+  opacity: 0.7;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

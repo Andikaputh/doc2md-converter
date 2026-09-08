@@ -9,6 +9,7 @@ function App() {
   const [originalFilename, setOriginalFilename] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -40,6 +41,7 @@ function App() {
       return;
     }
 
+    setErrorMessage('');
     const formData = new FormData();
     formData.append('file', file);
 
@@ -58,10 +60,10 @@ function App() {
         setOriginalFilename(data.filename);
         setMarkdown(data.markdown_content);
       } else {
-        alert(`Extraction failed: ${data.detail}`);
+        setErrorMessage(`Extraction failed: ${data.detail}`);
       }
     } catch (error) {
-      alert(`Network error: ${error.message}`);
+      setErrorMessage(`Network error: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -147,6 +149,13 @@ function App() {
           </button>
         </div>
         
+        {errorMessage && (
+          <div className="error-banner">
+            <span>{errorMessage}</span>
+            <button className="error-close" onClick={() => setErrorMessage('')}>&times;</button>
+          </div>
+        )}
+
         {isLoading && <div className="loading-text">Processing document... This might take a moment.</div>}
       </main>
       
