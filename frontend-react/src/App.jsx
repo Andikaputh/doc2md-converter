@@ -7,10 +7,29 @@ function App() {
   const [markdown, setMarkdown] = useState('');
   const [originalFilename, setOriginalFilename] = useState('');
   const [isCopied, setIsCopied] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setFile(e.dataTransfer.files[0]); // Menangkap file yang dijatuhkan
     }
   };
 
@@ -94,13 +113,24 @@ function App() {
       </header>
       
       <main>
-        <div className="upload-section">
+        <div 
+          className={`upload-section ${isDragging ? 'dragging' : ''}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Teks bantuan untuk area Drag & Drop */}
+          <div className="drag-drop-text" style={{ marginBottom: '15px', fontWeight: 'bold' }}>
+            {file ? `File terpilih: ${file.name}` : "Tarik & lepas file ke sini, atau klik tombol di bawah"}
+          </div>
+
           <input 
             type="file" 
             accept=".pdf,.docx,.pptx,.xlsx,.csv,.html,.json" 
             onChange={handleFileChange}
           />
           <button className="primary" onClick={handleConvert} disabled={isLoading || !file}>
+            {/* SVG icon tetap sama... */}
             <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
