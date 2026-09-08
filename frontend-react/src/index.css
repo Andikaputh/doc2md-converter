@@ -112,3 +112,57 @@ svg.icon { width: 16px; height: 16px; }
 .result-section h2 { font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 1rem; }
 
 .loading-text { color: var(--text-muted); font-size: 0.9rem; margin-top: 1rem; }
+
+/* Layout Split-Screen */
+.preview-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Membagi layar jadi 2 kolom sama besar */
+  gap: 2rem;
+  align-items: start;
+}
+
+/* Styling area Live Preview */
+.rendered-markdown {
+  background: var(--surface-code);
+  padding: 2.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+}
+
+.preview-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Merapikan tipografi di dalam React Markdown */
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  color: var(--text-main);
+}
+.markdown-body h1 { font-size: 1.8rem; }
+.markdown-body h2 { font-size: 1.5rem; }
+.markdown-body p { margin-bottom: 1rem; line-height: 1.7; }
+.markdown-body ul, .markdown-body ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+.markdown-body li { margin-bottom: 0.25rem; }
+.markdown-body code {
+  background-color: var(--bg-page);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+/* Responsif: Jika layar kecil (HP), susun ke bawah bukan ke samping */
+@media (max-width: 768px) {
+  .preview-container {
+    grid-template-columns: 1fr;
+  }
+}
