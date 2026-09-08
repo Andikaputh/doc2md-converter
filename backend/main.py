@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from markitdown import MarkItDown
 import os
-import shutil
+import asyncio
 
 # Initialize FastAPI App
 app = FastAPI(
@@ -14,7 +14,7 @@ app = FastAPI(
 # Configure CORS to allow frontend requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend URL
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,12 +32,13 @@ async def convert_document(file: UploadFile = File(...)):
     temp_file_path = f"temp_{file.filename}"
     
     try:
-        # Save the uploaded file temporarily
+        # 1. Baca dan simpan file secara asynchronous (tidak memblokir server)
+        content = await file.read()
         with open(temp_file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(content)
             
-        # Perform conversion
-        result = md.convert(temp_file_path)
+        # 2. Pindahkan tugas komputasi berat ke thread terpisah
+        result = await asyncio.to_thread(md.convert, temp_file_path)
         
         return {
             "success": True,
