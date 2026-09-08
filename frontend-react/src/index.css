@@ -1,18 +1,19 @@
 :root {
-  /* Dark mode palette */
-  --bg-page: #0a0a0a; /* Hitam pekat untuk kontras maksimal */
-  --text-main: #ffffff; /* Putih bersih */
-  --text-muted: #888888;
-  --border-color: #333333;
-  --surface-code: #141414;
+  /* Palette elegan: Soft blue & navy */
+  --bg-page: #f2f7fa; /* Biru muda yang sangat soft */
+  --text-main: #1f2d3d; /* Biru dongker/slate gelap untuk teks */
+  --text-muted: #667b8f;
+  --border-color: #d1dfeb;
+  --surface-code: #ffffff; /* Putih bersih untuk blok kode agar kontras */
   
-  /* Aksen Merah dan Putih */
-  --accent: #e60000; 
-  --accent-hover: #cc0000;
-  --accent-fg: #ffffff;
+  /* Aksen biru yang hanya sedikit lebih tua dari background */
+  --accent: #c8dbe8; 
+  --accent-hover: #b3cadd;
+  --accent-fg: #14202b; /* Teks gelap di atas tombol aksen */
   
-  --font-display: "Playfair Display", "Georgia", serif;
-  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Typography disamakan menjadi satu rumpun modern sans-serif */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: var(--font-ui); 
   --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
 }
 
@@ -23,36 +24,37 @@ body {
   color: var(--text-main); 
   line-height: 1.6; 
   padding: 4rem 1.5rem; 
+  -webkit-font-smoothing: antialiased;
 }
 
 .layout-grid { max-width: 900px; margin: 0 auto; display: grid; gap: 4rem; }
 
-/* Display text menggunakan Serif */
 header h1 { 
   font-family: var(--font-display); 
-  font-size: 3rem; 
-  font-weight: 700; 
+  font-size: 2.75rem; 
+  font-weight: 400; /* Dibuat lebih tipis untuk kesan elegan/premium */
   letter-spacing: -0.03em; 
-  margin-bottom: 0.75rem; 
+  margin-bottom: 0.5rem; 
 }
-header p { color: var(--text-muted); font-size: 1.15rem; max-width: 540px; }
+header p { color: var(--text-muted); font-size: 1.1rem; max-width: 540px; font-weight: 300; }
 
-/* Upload section: Sudut tajam dan dashed border */
+/* Upload section: Bersih, tanpa border putus-putus yang terlalu tebal */
 .upload-section { 
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  border: 1px dashed var(--border-color); 
-  padding: 3rem 2rem; 
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color); 
+  background-color: transparent;
+  padding: 3rem 2.5rem; 
   display: flex; 
   flex-direction: column;
   align-items: flex-start; 
   gap: 1.5rem; 
-  border-radius: 0; 
+  border-radius: 6px;
 }
 
 .upload-section.dragging {
-  border-color: var(--accent);
-  background-color: rgba(230, 0, 0, 0.03); 
-  transform: translateY(-2px); 
+  border-color: var(--text-main);
+  background-color: var(--surface-code); 
+  transform: scale(1.01); 
 }
 
 input[type="file"] { font-family: var(--font-ui); font-size: 0.95rem; color: var(--text-muted); }
@@ -68,14 +70,16 @@ button {
   font-weight: 500; 
   font-size: 0.9rem; 
   border: 1px solid var(--border-color); 
-  padding: 0.75rem 1.25rem; 
+  padding: 0.6rem 1.25rem; 
+  border-radius: 4px;
   cursor: pointer; 
-  transition: all 0.15s ease; 
+  transition: all 0.2s ease; 
 }
 button:hover {
-  border-color: var(--text-main);
+  border-color: var(--text-muted);
+  background-color: rgba(0,0,0,0.02);
 }
-button:active { transform: translateY(2px); }
+button:active { transform: translateY(1px); }
 
 button.primary { 
   background-color: var(--accent); 
@@ -86,9 +90,9 @@ button.primary:hover:not(:disabled) {
   background-color: var(--accent-hover); 
   border-color: var(--accent-hover);
 }
-button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-.shortcut-hint { color: var(--text-muted); font-size: 0.75rem; margin-left: 0.5rem; font-family: var(--font-mono); }
+.shortcut-hint { color: var(--text-muted); font-size: 0.75rem; margin-left: 0.5rem; font-family: var(--font-ui); }
 .toolbar { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; }
 
 /* Code Surface */
@@ -97,22 +101,25 @@ pre {
   color: var(--text-main); 
   font-family: var(--font-mono); 
   font-size: 0.85rem; 
-  padding: 2rem; 
+  padding: 2.5rem; 
   overflow-x: auto; 
   white-space: pre-wrap; 
   word-wrap: break-word; 
   border: 1px solid var(--border-color); 
+  border-radius: 6px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.02); /* Bayangan sangat tipis untuk kedalaman */
 }
 svg.icon { width: 18px; height: 18px; }
 
-/* Result Section: Aksen merah tebal di bagian atas */
+/* Result Section */
 .result-section { 
-  border-top: 4px solid var(--accent); 
-  padding-top: 2.5rem; 
+  border-top: 1px solid var(--border-color); 
+  padding-top: 3rem; 
 }
 .result-section h2 { 
   font-family: var(--font-display); 
-  font-size: 1.75rem; 
+  font-size: 1.5rem; 
+  font-weight: 500;
   margin-bottom: 1.5rem; 
 }
-.loading-text { color: var(--text-muted); font-size: 0.95rem; margin-top: 1rem; font-family: var(--font-mono); }
+.loading-text { color: var(--text-muted); font-size: 0.95rem; margin-top: 1rem; }
