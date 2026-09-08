@@ -1,52 +1,118 @@
 :root {
-    --bg-page: #fcfcfc;
-    --text-main: #1a1a1a;
-    --text-muted: #5e5e5e;
-    --border-color: #d4d4d4;
-    --surface-code: #f3f3f3;
-    --accent: #c2410c; 
-    --accent-hover: #9a3412;
-    
-    --font-display: "Playfair Display", "Georgia", serif;
-    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+  /* Dark mode palette */
+  --bg-page: #0a0a0a; /* Hitam pekat untuk kontras maksimal */
+  --text-main: #ffffff; /* Putih bersih */
+  --text-muted: #888888;
+  --border-color: #333333;
+  --surface-code: #141414;
+  
+  /* Aksen Merah dan Putih */
+  --accent: #e60000; 
+  --accent-hover: #cc0000;
+  --accent-fg: #ffffff;
+  
+  --font-display: "Playfair Display", "Georgia", serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font-ui); background-color: var(--bg-page); color: var(--text-main); line-height: 1.5; padding: 3rem 1.5rem; }
+body { 
+  font-family: var(--font-ui); 
+  background-color: var(--bg-page); 
+  color: var(--text-main); 
+  line-height: 1.6; 
+  padding: 4rem 1.5rem; 
+}
 
-.layout-grid { max-width: 900px; margin: 0 auto; display: grid; gap: 3rem; }
-header h1 { font-family: var(--font-display); font-size: 2.5rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
-header p { color: var(--text-muted); font-size: 1.1rem; max-width: 500px; }
+.layout-grid { max-width: 900px; margin: 0 auto; display: grid; gap: 4rem; }
 
-.upload-section { border: 1px solid var(--border-color); padding: 1.5rem; display: flex; align-items: center; gap: 1rem; }
-input[type="file"] { font-family: var(--font-ui); font-size: 0.9rem; color: var(--text-muted); }
+/* Display text menggunakan Serif */
+header h1 { 
+  font-family: var(--font-display); 
+  font-size: 3rem; 
+  font-weight: 700; 
+  letter-spacing: -0.03em; 
+  margin-bottom: 0.75rem; 
+}
+header p { color: var(--text-muted); font-size: 1.15rem; max-width: 540px; }
 
-.upload-section {
-  transition: all 0.2s ease-in-out;
-  border: 2px dashed transparent; /* Persiapan untuk border putus-putus */
-  padding: 2rem;
-  border-radius: 8px;
+/* Upload section: Sudut tajam dan dashed border */
+.upload-section { 
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px dashed var(--border-color); 
+  padding: 3rem 2rem; 
+  display: flex; 
+  flex-direction: column;
+  align-items: flex-start; 
+  gap: 1.5rem; 
+  border-radius: 0; 
 }
 
 .upload-section.dragging {
-  border-color: #007bff; /* Warna biru saat file diseret ke atas area */
-  background-color: rgba(0, 123, 255, 0.05);
-  transform: scale(1.02);
+  border-color: var(--accent);
+  background-color: rgba(230, 0, 0, 0.03); 
+  transform: translateY(-2px); 
 }
 
-button { display: inline-flex; align-items: center; gap: 0.5rem; background-color: var(--text-main); color: var(--bg-page); font-family: var(--font-ui); font-weight: 500; font-size: 0.9rem; border: none; padding: 0.6rem 1.2rem; cursor: pointer; transition: background-color 0.15s ease; }
+input[type="file"] { font-family: var(--font-ui); font-size: 0.95rem; color: var(--text-muted); }
+
+/* Buttons */
+button { 
+  display: inline-flex; 
+  align-items: center; 
+  gap: 0.5rem; 
+  background-color: transparent; 
+  color: var(--text-main); 
+  font-family: var(--font-ui); 
+  font-weight: 500; 
+  font-size: 0.9rem; 
+  border: 1px solid var(--border-color); 
+  padding: 0.75rem 1.25rem; 
+  cursor: pointer; 
+  transition: all 0.15s ease; 
+}
+button:hover {
+  border-color: var(--text-main);
+}
 button:active { transform: translateY(2px); }
-button.primary { background-color: var(--accent); }
-button.primary:hover:not(:disabled) { background-color: var(--accent-hover); }
-button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-.shortcut-hint { color: var(--text-muted); font-size: 0.75rem; margin-left: 0.5rem; font-family: var(--font-ui); }
-.toolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+button.primary { 
+  background-color: var(--accent); 
+  color: var(--accent-fg);
+  border: 1px solid var(--accent);
+}
+button.primary:hover:not(:disabled) { 
+  background-color: var(--accent-hover); 
+  border-color: var(--accent-hover);
+}
+button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-pre { background: var(--surface-code); color: var(--text-main); font-family: var(--font-mono); font-size: 0.85rem; padding: 1.5rem; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; border: 1px solid var(--border-color); }
-svg.icon { width: 16px; height: 16px; }
+.shortcut-hint { color: var(--text-muted); font-size: 0.75rem; margin-left: 0.5rem; font-family: var(--font-mono); }
+.toolbar { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; }
 
-.result-section { border-top: 2px solid var(--text-main); padding-top: 2rem; }
-.result-section h2 { font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 1rem; }
-.loading-text { color: var(--text-muted); font-size: 0.9rem; margin-top: 1rem; }
+/* Code Surface */
+pre { 
+  background: var(--surface-code); 
+  color: var(--text-main); 
+  font-family: var(--font-mono); 
+  font-size: 0.85rem; 
+  padding: 2rem; 
+  overflow-x: auto; 
+  white-space: pre-wrap; 
+  word-wrap: break-word; 
+  border: 1px solid var(--border-color); 
+}
+svg.icon { width: 18px; height: 18px; }
+
+/* Result Section: Aksen merah tebal di bagian atas */
+.result-section { 
+  border-top: 4px solid var(--accent); 
+  padding-top: 2.5rem; 
+}
+.result-section h2 { 
+  font-family: var(--font-display); 
+  font-size: 1.75rem; 
+  margin-bottom: 1.5rem; 
+}
+.loading-text { color: var(--text-muted); font-size: 0.95rem; margin-top: 1rem; font-family: var(--font-mono); }
