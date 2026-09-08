@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from markitdown import MarkItDown
 import os
@@ -20,34 +21,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+MAX_FILE_SIZE = 10_485_760 # 10 MB
+
+# MIDDLEWARE: Mengecek ukuran file sebelum diunduh oleh server
+@app.middleware("http")
+async def check_file_size_limit(request: Request, call_next):
+    if request.url.path == "/api/convert" and request.method == "POST":
+        content_length = request.headers.get("content-length")
+        # Jika ukuran di header melebihi batas, langsung tolak saat itu juga
+        if content_length and int(content_length) > MAX_FILE_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "File terlalu besar. Maksimal ukuran file adalah 10MB."}
+            )
+    return await call_next(request)
+
 # Initialize MarkItDown instance
 md = MarkItDown()
 
-# Batas maksimal file adalah 10 MB (10 * 1024 * 1024 bytes)
-MAX_FILE_SIZE = 10_485_760
-
 @app.post("/api/convert")
 async def convert_document(file: UploadFile = File(...)):
-    """
-    Receives an uploaded file, saves it temporarily, 
-    converts it to Markdown, and returns the string content.
-    """
-    # 1. Pengecekan ukuran file
-    if file.size and file.size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413, 
-            detail=f"File terlalu besar. Maksimal ukuran file adalah 10MB. File Anda: {file.size / 1_048_576:.2f}MB"
-        )
-
+    # Pengecekan di dalam sini (file.size) bisa dihapus karena sudah ditangani Middleware di atas.
+    
     temp_file_path = f"temp_{file.filename}"
     
     try:
-        # 1. Baca dan simpan file secara asynchronous (tidak memblokir server)
         content = await file.read()
         with open(temp_file_path, "wb") as buffer:
             buffer.write(content)
             
-        # 2. Pindahkan tugas komputasi berat ke thread terpisah
         result = await asyncio.to_thread(md.convert, temp_file_path)
         
         return {
@@ -60,6 +62,5 @@ async def convert_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
         
     finally:
-        # Clean up the temporary file
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
