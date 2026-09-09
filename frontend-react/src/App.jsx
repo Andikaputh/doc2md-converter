@@ -9,7 +9,7 @@ function App() {
   const [originalFilename, setOriginalFilename] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [error, setError] = useState(null);
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -36,12 +36,19 @@ function App() {
   };
 
   const handleConvert = async () => {
+    setError(null); // Bersihkan error lama
+
     if (!file) {
-      alert('No file selected. Please choose a document first.');
+      setError('Select documents first before extracting.');
       return;
     }
 
-    setErrorMessage('');
+    // Validasi frontend untuk file > 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File is too large. Maximum file size is 10MB.');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
@@ -49,6 +56,7 @@ function App() {
     setMarkdown('');
 
     try {
+      // Pastikan URL mengarah ke URL produksi Vercel/Render milikmu
       const response = await fetch('https://doc2md-api-d1ox.onrender.com/api/convert', {
         method: 'POST',
         body: formData
@@ -60,10 +68,10 @@ function App() {
         setOriginalFilename(data.filename);
         setMarkdown(data.markdown_content);
       } else {
-        setErrorMessage(`Extraction failed: ${data.detail}`);
+        setError(`Extraction failed: ${data.detail}`);
       }
-    } catch (error) {
-      setErrorMessage(`Network error: ${error.message}`);
+    } catch (err) {
+      setError(`Connection lost: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +101,15 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Keyboard shortcut listener untuk menyalin
+  const handleReset = () => {
+    setFile(null);
+    setMarkdown('');
+    setError(null);
+    setOriginalFilename('');
+    const fileInput = document.querySelector('input[type="file"]');
+    if (fileInput) fileInput.value = '';
+  };
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && markdown) {
@@ -115,6 +131,14 @@ function App() {
         <p>Transform complex files into clean, LLM-ready markdown. Powered by MarkItDown & React.</p>
       </header>
       
+      {/* Banner Error dipindah ke luar kotak area drag & drop agar lebih tegas */}
+      {errorMessage && (
+        <div className="error-banner">
+          <span>{errorMessage}</span>
+          <button className="error-close" onClick={() => setErrorMessage('')}>&times;</button>
+        </div>
+      )}
+
       <main>
         <div 
           className={`upload-section ${isDragging ? 'dragging' : ''}`}
@@ -122,7 +146,6 @@ function App() {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          {/* Teks bantuan untuk area Drag & Drop */}
           <div className="drag-drop-text">
             {file ? (
               <span className="file-selected">Selected file: <strong>{file.name}</strong></span>
@@ -136,27 +159,30 @@ function App() {
             accept=".pdf,.docx,.pptx,.xlsx,.csv,.html,.json" 
             onChange={handleFileChange}
           />
-          <button className="primary" onClick={handleConvert} disabled={isLoading || !file}>
-            {/* SVG icon tetap sama... */}
-            <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-              <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
-            {isLoading ? 'Extracting...' : 'Extract Markdown'}
-          </button>
+          
+          {/* Tombol Extract dan Reset disejajarkan menggunakan class toolbar */}
+          <div className="toolbar" style={{ justifyContent: 'center', marginTop: '1rem', width: '100%' }}>
+            <button className="primary" onClick={handleConvert} disabled={isLoading || !file}>
+              <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              {isLoading ? 'Extracting...' : 'Extract Markdown'}
+            </button>
+
+            {/* Tombol Reset muncul jika ada file yang dipilih atau hasil render yang tampil */}
+            {(file || markdown) && !isLoading && (
+              <button onClick={handleReset} style={{ backgroundColor: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
+                Reset
+              </button>
+            )}
+          </div>
         </div>
         
-        {errorMessage && (
-          <div className="error-banner">
-            <span>{errorMessage}</span>
-            <button className="error-close" onClick={() => setErrorMessage('')}>&times;</button>
-          </div>
-        )}
-
-        {isLoading && <div className="loading-text">Processing document... This might take a moment.</div>}
+        {isLoading && <div className="loading-text" style={{ textAlign: 'center' }}>Processing document... This might take a moment.</div>}
       </main>
       
       {markdown && !isLoading && (
