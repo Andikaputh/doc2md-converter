@@ -160,10 +160,42 @@ svg.icon { width: 16px; height: 16px; }
   font-size: 0.85em;
 }
 
-/* Responsif: Jika layar kecil (HP), susun ke bawah bukan ke samping */
+/* Responsif: Penyesuaian untuk layar HP dan Tablet */
 @media (max-width: 768px) {
+  /* Mengurangi jarak kosong di pinggir layar */
+  body { 
+    padding: 1.5rem 1rem; 
+  }
+  
+  /* Mengurangi jarak antar elemen vertikal */
+  .layout-grid { 
+    gap: 1.5rem; 
+  }
+  
+  /* Mengecilkan judul agar tidak memakan layar */
+  header h1 { 
+    font-size: 1.8rem; 
+  }
+  
+  /* Susun split-screen menjadi atas-bawah */
   .preview-container {
     grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  /* Susun tombol toolbar menjadi memanjang ke bawah di layar kecil */
+  .toolbar {
+    flex-direction: column;
+  }
+  
+  .toolbar button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Pengecilan area drag & drop */
+  .upload-section {
+    padding: 2rem 1rem;
   }
 }
 
@@ -200,4 +232,4 @@ svg.icon { width: 16px; height: 16px; }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
-}
+} 
