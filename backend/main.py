@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from markitdown import MarkItDown
 import os
 import asyncio
+import tempfile
+import shutil
 
 # Initialize FastAPI App
 app = FastAPI(
@@ -48,15 +50,14 @@ def health_check():
 
 @app.post("/api/convert")
 async def convert_document(file: UploadFile = File(...)):
-    # Pengecekan di dalam sini (file.size) bisa dihapus karena sudah ditangani Middleware di atas.
+    ext = os.path.splitext(file.filename)[1]
     
-    temp_file_path = f"temp_{file.filename}"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        # 2. Gunakan shutil.copyfileobj untuk efisiensi RAM (Streaming)
+        shutil.copyfileobj(file.file, tmp)
+        temp_file_path = tmp.name
     
     try:
-        content = await file.read()
-        with open(temp_file_path, "wb") as buffer:
-            buffer.write(content)
-            
         result = await asyncio.to_thread(md.convert, temp_file_path)
         
         return {
