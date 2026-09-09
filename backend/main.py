@@ -39,6 +39,13 @@ async def check_file_size_limit(request: Request, call_next):
 # Initialize MarkItDown instance
 md = MarkItDown()
 
+@app.get("/")
+def health_check():
+    """
+    Endpoint sederhana untuk diping oleh cron-job agar server tidak tertidur.
+    """
+    return {"status": "Alive and kicking!", "service": "Doc2MD API"}
+
 @app.post("/api/convert")
 async def convert_document(file: UploadFile = File(...)):
     # Pengecekan di dalam sini (file.size) bisa dihapus karena sudah ditangani Middleware di atas.
