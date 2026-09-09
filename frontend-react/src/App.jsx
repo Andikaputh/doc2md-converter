@@ -9,7 +9,7 @@ function App() {
   const [originalFilename, setOriginalFilename] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [error, setError] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -36,16 +36,16 @@ function App() {
   };
 
   const handleConvert = async () => {
-    setError(null); // Bersihkan error lama
+    setErrorMessage(null); // Bersihkan error lama
 
     if (!file) {
-      setError('Select documents first before extracting.');
+      setErrorMessage('Select documents first before extracting.');
       return;
     }
 
     // Validasi frontend untuk file > 10MB
     if (file.size > 10 * 1024 * 1024) {
-      setError('File is too large. Maximum file size is 10MB.');
+      setErrorMessage('File is too large. Maximum file size is 10MB.');
       return;
     }
 
@@ -68,10 +68,10 @@ function App() {
         setOriginalFilename(data.filename);
         setMarkdown(data.markdown_content);
       } else {
-        setError(`Extraction failed: ${data.detail}`);
+        setErrorMessage(`Extraction failed: ${data.detail}`);
       }
     } catch (err) {
-      setError(`Connection lost: ${err.message}`);
+      setErrorMessage(`Connection lost: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +104,7 @@ function App() {
   const handleReset = () => {
     setFile(null);
     setMarkdown('');
-    setError(null);
+    setErrorMessage(null);
     setOriginalFilename('');
     const fileInput = document.querySelector('input[type="file"]');
     if (fileInput) fileInput.value = '';
