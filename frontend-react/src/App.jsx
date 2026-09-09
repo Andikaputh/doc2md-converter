@@ -3,17 +3,23 @@ import { useState, useEffect } from 'react';
 import './index.css';
 
 function App() {
-  const [file, setFile] = useState(null);
+  // 1. Ubah state 'file' tunggal menjadi Array 'files'
+  const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [markdown, setMarkdown] = useState('');
   const [originalFilename, setOriginalFilename] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  
+  // State baru untuk menandakan apakah proses terakhir adalah batch (ZIP)
+  const [isBatchSuccess, setIsBatchSuccess] = useState(false); 
 
   const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      // Mengambil maksimal 10 file
+      setFiles(Array.from(e.target.files).slice(0, 10));
+      setIsBatchSuccess(false);
     }
   };
 
@@ -30,45 +36,85 @@ function App() {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0]); // Menangkap file yang dijatuhkan
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setFiles(Array.from(e.dataTransfer.files).slice(0, 10));
+      setIsBatchSuccess(false);
     }
   };
 
   const handleConvert = async () => {
-    setErrorMessage(null); // Bersihkan error lama
+    setErrorMessage(null);
 
-    if (!file) {
+    if (files.length === 0) {
       setErrorMessage('Select documents first before extracting.');
       return;
     }
 
-    // Validasi frontend untuk file > 10MB
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMessage('File is too large. Maximum file size is 10MB.');
+    // 2. Validasi ukuran total semua file (Maksimal 100MB untuk batch)
+    const totalSize = files.reduce((acc, file) => acc + file.size, 0);
+    if (totalSize > 100 * 1024 * 1024) {
+      setErrorMessage('Total file size is too large. Maximum total size is 100MB.');
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     setIsLoading(true);
     setMarkdown('');
+    setIsBatchSuccess(false);
 
     try {
-      // Pastikan URL mengarah ke URL produksi Vercel/Render milikmu
-      const response = await fetch('https://doc2md-api-d1ox.onrender.com/api/convert', {
-        method: 'POST',
-        body: formData
-      });
+      if (files.length === 1) {
+        // ==========================================
+        // CABANG 1: PROSES FILE TUNGGAL (LIVE PREVIEW)
+        // ==========================================
+        const singleFormData = new FormData();
+        singleFormData.append('file', files[0]);
 
-      const data = await response.json();
+        const response = await fetch('https://doc2md-api-d1ox.onrender.com/api/convert', {
+          method: 'POST',
+          body: singleFormData
+        });
 
-      if (response.ok) {
-        setOriginalFilename(data.filename);
-        setMarkdown(data.markdown_content);
+        const data = await response.json();
+
+        if (response.ok) {
+          setOriginalFilename(data.filename);
+          setMarkdown(data.markdown_content);
+        } else {
+          setErrorMessage(`Extraction failed: ${data.detail}`);
+        }
+
       } else {
-        setErrorMessage(`Extraction failed: ${data.detail}`);
+        // ==========================================
+        // CABANG 2: PROSES MASAL (DOWNLOAD ZIP)
+        // ==========================================
+        const batchFormData = new FormData();
+        files.forEach(file => {
+          batchFormData.append('files', file); // Kunci 'files' sesuai backend
+        });
+
+        const response = await fetch('https://doc2md-api-d1ox.onrender.com/api/convert/batch', {
+          method: 'POST',
+          body: batchFormData
+        });
+
+        if (response.ok) {
+          // Tangani unduhan ZIP dari memory buffer
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'extracted_markdowns.zip';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          setIsBatchSuccess(true);
+        } else {
+          // Tangani error JSON jika gagal
+          const errorData = await response.json();
+          setErrorMessage(`Batch extraction failed: ${errorData.detail || 'Unknown error'}`);
+        }
       }
     } catch (err) {
       setErrorMessage(`Connection lost: ${err.message}`);
@@ -102,10 +148,11 @@ function App() {
   };
 
   const handleReset = () => {
-    setFile(null);
+    setFiles([]);
     setMarkdown('');
     setErrorMessage(null);
     setOriginalFilename('');
+    setIsBatchSuccess(false);
     const fileInput = document.querySelector('input[type="file"]');
     if (fileInput) fileInput.value = '';
   };
@@ -131,7 +178,6 @@ function App() {
         <p>Transform complex files into clean, LLM-ready markdown. Powered by MarkItDown & React.</p>
       </header>
       
-      {/* Banner Error dipindah ke luar kotak area drag & drop agar lebih tegas */}
       {errorMessage && (
         <div className="error-banner">
           <span>{errorMessage}</span>
@@ -147,22 +193,26 @@ function App() {
           onDrop={handleDrop}
         >
           <div className="drag-drop-text">
-            {file ? (
-              <span className="file-selected">Selected file: <strong>{file.name}</strong></span>
+            {files.length > 0 ? (
+              <span className="file-selected">
+                {files.length === 1 
+                  ? <span>Selected file: <strong>{files[0].name}</strong></span> 
+                  : <span>Selected <strong>{files.length}</strong> files ready for batch processing</span>}
+              </span>
             ) : (
-              "Drag & drop your document here, or use the button below"
+              "Drag & drop your documents here, or use the button below (Max 10 files)"
             )}
           </div>
 
           <input 
             type="file" 
+            multiple // 3. Atribut krusial agar browser izinkan seleksi banyak file
             accept=".pdf,.docx,.pptx,.xlsx,.csv,.html,.json" 
             onChange={handleFileChange}
           />
           
-          {/* Tombol Extract dan Reset disejajarkan menggunakan class toolbar */}
           <div className="toolbar" style={{ justifyContent: 'center', marginTop: '1rem', width: '100%' }}>
-            <button className="primary" onClick={handleConvert} disabled={isLoading || !file}>
+            <button className="primary" onClick={handleConvert} disabled={isLoading || files.length === 0}>
               <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <polyline points="14 2 14 8 20 8"></polyline>
@@ -170,11 +220,10 @@ function App() {
                 <line x1="16" y1="17" x2="8" y2="17"></line>
                 <polyline points="10 9 9 9 8 9"></polyline>
               </svg>
-              {isLoading ? 'Extracting...' : 'Extract Markdown'}
+              {isLoading ? 'Extracting...' : (files.length > 1 ? 'Extract All to ZIP' : 'Extract Markdown')}
             </button>
 
-            {/* Tombol Reset muncul jika ada file yang dipilih atau hasil render yang tampil */}
-            {(file || markdown) && !isLoading && (
+            {(files.length > 0 || markdown || isBatchSuccess) && !isLoading && (
               <button onClick={handleReset} style={{ backgroundColor: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
                 Reset
               </button>
@@ -182,15 +231,23 @@ function App() {
           </div>
         </div>
         
-        {isLoading && <div className="loading-text" style={{ textAlign: 'center' }}>Processing document... This might take a moment.</div>}
+        {isLoading && <div className="loading-text" style={{ textAlign: 'center' }}>Processing {files.length > 1 ? 'documents' : 'document'}... This might take a moment.</div>}
+
+        {/* 4. Notifikasi sukses khusus untuk Batch Processing */}
+        {isBatchSuccess && !isLoading && (
+          <div style={{ marginTop: '2rem', padding: '1.5rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', color: '#166534', textAlign: 'center' }}>
+            <h3 style={{ marginBottom: '0.5rem' }}>Batch Extraction Complete! 🎉</h3>
+            <p>Your ZIP file containing {files.length} markdown documents has been downloaded.</p>
+          </div>
+        )}
       </main>
       
-      {markdown && !isLoading && (
+      {/* 5. Live Preview hanya tampil jika bukan proses batch */}
+      {markdown && !isLoading && !isBatchSuccess && (
         <section className="result-section">
           <h2>Extraction Result</h2>
           <div className="preview-container">
             
-            {/* Bagian Kiri: Raw Markdown */}
             <div className="raw-markdown">
               <div className="toolbar">
                 <button onClick={handleCopy}>
@@ -223,7 +280,6 @@ function App() {
               <pre>{markdown}</pre>
             </div>
 
-            {/* Bagian Kanan: Visual Preview */}
             <div className="rendered-markdown">
               <h3 className="preview-title">Live Preview</h3>
               <div className="markdown-body">
