@@ -1,4 +1,4 @@
-# MarkItDown Web Converter
+# MarkItDown Web Converter.
 
 A clean, full-stack web application that converts various document formats such as **PDF, DOCX, PPTX, XLSX**, and more into clean, structured **Markdown**.
 
