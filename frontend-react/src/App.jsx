@@ -20,6 +20,8 @@ function App() {
   
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [progressText, setProgressText] = useState('');
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -55,6 +57,18 @@ function App() {
     setIsLoading(true);
     setMarkdown('');
     setBatchResults([]); // Reset hasil batch
+    setProgress(10);
+    setProgressText('Uploading files to server...');
+
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 85) {
+          setProgressText('Extracting documents... (This might take a moment)');
+          return prev; // Berhenti di 85% sampai server selesai merespons
+        }
+        return prev + 15; // Naik perlahan
+      });
+    }, 1000);
 
     try {
       if (files.length === 1) {
@@ -68,6 +82,10 @@ function App() {
         });
 
         const data = await response.json();
+        clearInterval(progressInterval); // Hentikan timer otomatis
+        setProgress(100);
+        setProgressText('Finalizing results...');
+
         if (response.ok) {
           setOriginalFilename(data.filename);
           setMarkdown(data.markdown_content);
@@ -85,6 +103,10 @@ function App() {
         });
         
         const data = await response.json();
+        clearInterval(progressInterval); // Hentikan timer otomatis
+        setProgress(100);
+        setProgressText('Finalizing results...');
+        
         if (response.ok) {
           setBatchResults(data.results);
           setShowBatchModal(true); // Tampilkan pop-up!
@@ -93,9 +115,12 @@ function App() {
         }
       }
     } catch (err) {
+      clearInterval(progressInterval);
+      setProgress(0);
       setErrorMessage(`Connection lost: ${err.message}`);
     } finally {
-      setIsLoading(false);
+      clearInterval(progressInterval);
+      setTimeout(() => setIsLoading(false), 500);
     }
   };
 
@@ -180,7 +205,17 @@ function App() {
           </div>
         </div>
         
-        {isLoading && <div className="loading-text" style={{ textAlign: 'center' }}>Processing {files.length > 1 ? 'documents' : 'document'}... This might take a moment.</div>}
+        {isLoading && (
+          <div className="progress-wrapper">
+            <div className="progress-text">
+              <span>{progressText}</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="progress-container">
+              <div className="progress-bar" style={{ width: `${progress}%` }}></div>
+            </div>
+          </div>
+        )}
       </main>
       
       {/* --- LIVE PREVIEW (TUNGGAL) --- */}
