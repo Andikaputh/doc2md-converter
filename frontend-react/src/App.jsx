@@ -1,5 +1,5 @@
 import ReactMarkdown from 'react-markdown';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import './index.css';
@@ -24,6 +24,18 @@ function App() {
   const [addLlmContext, setAddLlmContext] = useState(true);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
+
+  const resultRef = useRef(null);
+
+  // Word and token count estimation function
+  const getStats = (text) => {
+    if (!text) return { words: 0, tokens: 0 };
+    const words = text.trim().split(/\s+/).length;
+    return {
+      words: words,
+      tokens: Math.ceil(words * 1.3) // Rumus standar LLM
+    };
+  };
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -91,6 +103,7 @@ function App() {
 
         if (response.ok) {
           setOriginalFilename(data.filename);
+          setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
           
           // Suntikkan Metadata jika fitur aktif
           let finalContent = data.markdown_content;
@@ -129,6 +142,7 @@ function App() {
           });
           
           setBatchResults(processedResults);
+          setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
           setShowBatchModal(true);
         } else {
           setErrorMessage(`Batch extraction failed: ${data.detail || 'Unknown error'}`);
@@ -269,16 +283,23 @@ function App() {
       
       {/* --- LIVE PREVIEW (TUNGGAL) --- */}
       {markdown && !isLoading && files.length === 1 && (
-        <section className="result-section">
+        <section className="result-section" ref={resultRef}>
           <h2>Extraction Result</h2>
           <div className="preview-container">
             <div className="raw-markdown">
-              <div className="toolbar">
-                <button onClick={handleCopy}>{isCopied ? 'Copied' : 'Copy Source'}</button>
-                <button onClick={handleDownload}>Save as .md</button>
+              <div className="toolbar" style={{ justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  <span><strong style={{color: 'var(--text-main)'}}>{getStats(markdown).words}</strong> words</span>
+                  <span><strong style={{color: 'var(--accent)'}}>~{getStats(markdown).tokens}</strong> tokens</span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button onClick={handleCopy}>{isCopied ? 'Copied' : 'Copy Source'}</button>
+                  <button onClick={handleDownload}>Save as .md</button>
+                </div>
               </div>
-              <pre>{markdown}</pre>
-            </div>
+              <pre>{markdown}</pre> {/* <--- Penambahan <pre> yang sempat hilang */}
+            </div> {/* <--- Penambahan penutup </div> untuk raw-markdown */}
+
             <div className="rendered-markdown">
               <h3 className="preview-title">Live Preview</h3>
               <div className="markdown-body"><ReactMarkdown>{markdown}</ReactMarkdown></div>
@@ -289,7 +310,7 @@ function App() {
 
       {/* --- POP-UP MODAL (BATCH) --- */}
       {showBatchModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '1rem' }}>
+        <div ref={resultRef} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '1rem' }}>
           <div style={{ backgroundColor: 'var(--bg-page)', borderRadius: '8px', padding: '2rem', width: '100%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
@@ -315,8 +336,14 @@ function App() {
                       
                       <div style={{ overflow: 'hidden' }}>
                         <h4 style={{ margin: '0 0 0.25rem 0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{res.filename}</h4>
-                        <span style={{ fontSize: '0.8rem', color: res.success ? 'var(--text-muted)' : '#9b2c2c' }}>
-                          {res.success ? `${(res.content.length / 1024).toFixed(1)} KB extracted` : `Error: ${res.error}`}
+                        <span style={{ fontSize: '0.8rem', color: res.success ? 'var(--text-muted)' : '#9b2c2c', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          {res.success ? (
+                            <>
+                              <span>{(res.content.length / 1024).toFixed(1)} KB</span>
+                              <span>•</span>
+                              <span style={{color: 'var(--accent)', fontWeight: 500}}>~{getStats(res.content).tokens} tokens</span>
+                            </>
+                          ) : `Error: ${res.error}`}
                         </span>
                       </div>
                     </div>
