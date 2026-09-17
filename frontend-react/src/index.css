@@ -293,3 +293,36 @@ svg.icon { width: 16px; height: 16px; }
   height: 16px;
   cursor: pointer;
 }
+
+/* --- UI Visual File Queue --- */
+.file-chip-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+.file-chip {
+  background-color: var(--surface-code);
+  border: 1px solid var(--border-color);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-main);
+}
+.file-chip button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s ease;
+}
+.file-chip button:hover {
+  color: #9b2c2c;
+}

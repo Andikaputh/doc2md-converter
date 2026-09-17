@@ -54,6 +54,10 @@ function App() {
     }
   };
 
+  const removeFile = (indexToRemove) => {
+    setFiles(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
+  };
+
   const handleConvert = async () => {
     setErrorMessage(null);
 
@@ -259,11 +263,32 @@ function App() {
       <main>
         <div className={`upload-section ${isDragging ? 'dragging' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="drag-drop-text">
-            {files.length > 0 ? (
-              <span className="file-selected">
-                {files.length === 1 ? <span>Selected file: <strong>{files[0].name}</strong></span> : <span>Selected <strong>{files.length}</strong> files ready for batch processing</span>}
-              </span>
-            ) : "Drag & drop your documents here, or use the button below (Max 10 files)"}
+            {files.length === 0 && "Drag & drop your documents here, or use the button below (Max 10 files)"}
+            
+            {files.length > 0 && (
+              <div className="file-chip-container">
+                {files.map((f, index) => (
+                  <div key={index} className="file-chip">
+                    <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.name}
+                    </span>
+                    <button 
+                      onClick={(e) => { 
+                        e.preventDefault(); // Mencegah klik men-trigger upload window
+                        e.stopPropagation(); 
+                        removeFile(index); 
+                      }} 
+                      title="Remove file"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <input type="file" multiple accept=".pdf,.docx,.pptx,.xlsx,.csv,.html,.json" onChange={handleFileChange} />
