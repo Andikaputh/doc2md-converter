@@ -17,6 +17,7 @@ function App() {
   const [batchResults, setBatchResults] = useState([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [copiedBatchIndex, setCopiedBatchIndex] = useState(null);
+  const [expandedBatchItems, setExpandedBatchItems] = useState({});
   
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -57,6 +58,7 @@ function App() {
     setIsLoading(true);
     setMarkdown('');
     setBatchResults([]); // Reset hasil batch
+    setExpandedBatchItems({});
     setProgress(10);
     setProgressText('Uploading files to server...');
 
@@ -151,6 +153,13 @@ function App() {
     saveAs(blob, filename);
   };
 
+  const toggleBatchItem = (index) => {
+    setExpandedBatchItems(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
   const downloadAllAsZip = async () => {
     const zip = new JSZip();
     batchResults.forEach(res => {
@@ -165,6 +174,7 @@ function App() {
   const handleReset = () => {
     setFiles([]); setMarkdown(''); setErrorMessage(null); setOriginalFilename('');
     setBatchResults([]); setShowBatchModal(false);
+    setExpandedBatchItems({});
     const fileInput = document.querySelector('input[type="file"]');
     if (fileInput) fileInput.value = '';
   };
@@ -250,24 +260,50 @@ function App() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
               {batchResults.map((res, index) => (
-                <div key={index} style={{ border: '1px solid var(--border-color)', padding: '1rem', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: res.success ? 'transparent' : '#fdf2f2' }}>
-                  <div style={{ overflow: 'hidden' }}>
-                    <h4 style={{ margin: '0 0 0.25rem 0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{res.filename}</h4>
-                    <span style={{ fontSize: '0.8rem', color: res.success ? 'var(--text-muted)' : '#9b2c2c' }}>
-                      {res.success ? `${(res.content.length / 1024).toFixed(1)} KB extracted` : `Error: ${res.error}`}
-                    </span>
-                  </div>
+                <div key={index} style={{ border: '1px solid var(--border-color)', borderRadius: '6px', overflow: 'hidden', backgroundColor: res.success ? 'transparent' : '#fdf2f2' }}>
                   
-                  {res.success && (
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => copyBatchItem(res.content, index)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'transparent', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>
-                        {copiedBatchIndex === index ? 'Copied!' : 'Copy'}
-                      </button>
-                      <button onClick={() => downloadBatchItem(res.content, res.filename)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
-                        ↓ .md
-                      </button>
+                  {/* --- BAGIAN ATAS: Header Kotak (Selalu Tampil) --- */}
+                  <div style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                      {/* Tombol Panah Dropdown (Hanya muncul jika sukses) */}
+                      {res.success && (
+                        <button onClick={() => toggleBatchItem(index)} style={{ background: 'none', border: 'none', padding: '0.2rem', cursor: 'pointer', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg style={{ transform: expandedBatchItems[index] ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                          </svg>
+                        </button>
+                      )}
+                      
+                      <div style={{ overflow: 'hidden' }}>
+                        <h4 style={{ margin: '0 0 0.25rem 0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{res.filename}</h4>
+                        <span style={{ fontSize: '0.8rem', color: res.success ? 'var(--text-muted)' : '#9b2c2c' }}>
+                          {res.success ? `${(res.content.length / 1024).toFixed(1)} KB extracted` : `Error: ${res.error}`}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {res.success && (
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button onClick={() => copyBatchItem(res.content, index)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'transparent', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>
+                          {copiedBatchIndex === index ? 'Copied!' : 'Copy'}
+                        </button>
+                        <button onClick={() => downloadBatchItem(res.content, res.filename)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
+                          ↓ .md
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* --- BAGIAN BAWAH: Dropdown Preview (Disembunyikan) --- */}
+                  {res.success && expandedBatchItems[index] && (
+                    <div style={{ borderTop: '1px solid var(--border-color)', padding: '1.5rem', backgroundColor: 'var(--surface-code)' }}>
+                      {/* Menggunakan ReactMarkdown agar desainnya sama rapinya dengan Live Preview utama */}
+                      <div className="markdown-body" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                        <ReactMarkdown>{res.content}</ReactMarkdown>
+                      </div>
                     </div>
                   )}
+                  
                 </div>
               ))}
             </div>
