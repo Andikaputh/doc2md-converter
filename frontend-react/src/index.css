@@ -263,3 +263,33 @@ svg.icon { width: 16px; height: 16px; }
   background-color: var(--accent);
   transition: width 0.3s ease;
 }
+
+/* --- UI Jaminan Privasi & Toggle LLM --- */
+.privacy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #f0fdf4;
+  color: #166534;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-top: 1rem;
+  border: 1px solid #bbf7d0;
+}
+.llm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  margin-top: 1rem;
+  cursor: pointer;
+}
+.llm-toggle input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

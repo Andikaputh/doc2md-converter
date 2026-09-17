@@ -21,6 +21,7 @@ function App() {
   
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [addLlmContext, setAddLlmContext] = useState(true);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
 
@@ -90,7 +91,15 @@ function App() {
 
         if (response.ok) {
           setOriginalFilename(data.filename);
-          setMarkdown(data.markdown_content);
+          
+          // Suntikkan Metadata jika fitur aktif
+          let finalContent = data.markdown_content;
+          if (addLlmContext) {
+            const date = new Date().toISOString().split('T')[0];
+            finalContent = `> **Document Context for LLM**\n> Filename: \`${data.filename}\`\n> Extracted on: \`${date}\`\n\n---\n\n${finalContent}`;
+          }
+          
+          setMarkdown(finalContent);
         } else {
           setErrorMessage(`Extraction failed: ${data.detail}`);
         }
@@ -110,8 +119,17 @@ function App() {
         setProgressText('Finalizing results...');
         
         if (response.ok) {
-          setBatchResults(data.results);
-          setShowBatchModal(true); // Tampilkan pop-up!
+          // Inject Metadata into all files in the batch
+          const processedResults = data.results.map(res => {
+            if (res.success && addLlmContext) {
+              const date = new Date().toISOString().split('T')[0];
+              res.content = `> **Document Context for LLM**\n> Filename: \`${res.filename}\`\n> Extracted on: \`${date}\`\n\n---\n\n${res.content}`;
+            }
+            return res;
+          });
+          
+          setBatchResults(processedResults);
+          setShowBatchModal(true);
         } else {
           setErrorMessage(`Batch extraction failed: ${data.detail || 'Unknown error'}`);
         }
@@ -184,6 +202,15 @@ function App() {
       <header>
         <h1>Document Extraction</h1>
         <p>Transform complex files into clean, LLM-ready markdown. Powered by MarkItDown & React.</p>
+        
+        {/* Lencana Privasi */}
+        <div className="privacy-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          100% Private. Processed in-memory & instantly deleted.
+        </div>
       </header>
       
       {errorMessage && (
@@ -205,6 +232,18 @@ function App() {
 
           <input type="file" multiple accept=".pdf,.docx,.pptx,.xlsx,.csv,.html,.json" onChange={handleFileChange} />
           
+          {/* Checkbox Konteks LLM (Hanya muncul jika ada file yang dipilih) */}
+          {files.length > 0 && (
+            <label className="llm-toggle">
+              <input 
+                type="checkbox" 
+                checked={addLlmContext} 
+                onChange={(e) => setAddLlmContext(e.target.checked)} 
+              />
+              Inject LLM Context (Filename & Date)
+            </label>
+          )}
+
           <div className="toolbar" style={{ justifyContent: 'center', marginTop: '1rem', width: '100%' }}>
             <button className="primary" onClick={handleConvert} disabled={isLoading || files.length === 0}>
               {isLoading ? 'Extracting...' : (files.length > 1 ? 'Preview Batch Extraction' : 'Extract Markdown')}
