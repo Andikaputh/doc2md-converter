@@ -19,6 +19,7 @@ function App() {
   const [copiedBatchIndex, setCopiedBatchIndex] = useState(null);
   const [expandedBatchItems, setExpandedBatchItems] = useState({});
   const [isCopiedAll, setIsCopiedAll] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
   
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -209,10 +210,17 @@ function App() {
   };
 
   const getMergedContent = () => {
-    return batchResults
+    const mergedDocs = batchResults
       .filter(res => res.success)
       .map(res => `\n\n# ==========================================\n# 📄 DOCUMENT: ${res.filename}\n# ==========================================\n\n${res.content}`)
       .join('\n\n');
+      
+    // Jika ada instruksi khusus, letakkan di paling atas sebagai System Prompt
+    if (customPrompt.trim()) {
+      return `### INSTRUCTIONS ###\n${customPrompt.trim()}\n\n### KNOWLEDGE BASE ###${mergedDocs}`;
+    }
+    
+    return mergedDocs;
   };
 
   const copyAllMerged = () => {
@@ -419,6 +427,22 @@ function App() {
                   
                 </div>
               ))}
+            </div>
+            
+            {/* Input Custom Prompt LLM */}
+            <div style={{ marginTop: '1rem', marginBottom: '1.5rem', backgroundColor: 'var(--surface-code)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
+                ⚡ Add AI Instructions (Optional)
+              </label>
+              <textarea 
+                placeholder="e.g., 'Summarize the key financial metrics from these reports...'"
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                style={{ width: '100%', minHeight: '60px', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-page)', color: 'var(--text-main)', fontFamily: 'inherit', resize: 'vertical' }}
+              />
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                This instruction will be pinned to the top of your merged document when copied.
+              </p>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
