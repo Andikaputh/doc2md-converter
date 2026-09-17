@@ -98,27 +98,9 @@ async def convert_batch_documents(files: List[UploadFile] = File(...)):
     if len(files) > MAX_BATCH_FILES:
         return JSONResponse(status_code=400, content={"detail": f"Maximum {MAX_BATCH_FILES} files allowed per batch."})
     
-    #  Process each file concurrently using asyncio.gather
+    # Process each file concurrently
     tasks = [process_single_file(f) for f in files]
     results = await asyncio.gather(*tasks)
-    
-    # Prepare the ZIP file in memory (RAM).
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for res in results:
-            if res["success"]:
-                # Add the successfully processed Markdown file to a ZIP archive.
-                zip_file.writestr(res["filename"], res["content"])
-            else:
-                # If a file fails, create a TXT file containing the error message so the user is informed.
-                zip_file.writestr(f"ERROR_{res['filename']}.txt", f"Failed to convert. Error: {res['error']}")
-    
-    # Reset the memory cursor position to the beginning before sending.
-    zip_buffer.seek(0)
-    
-    # Send directly as a downloadable ZIP file.
-    return StreamingResponse(
-        zip_buffer,
-        media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=extracted_markdowns.zip"}
-    )
+        
+    # Langsung kembalikan daftar hasil sebagai JSON, bukan ZIP
+    return {"success": True, "results": results}
