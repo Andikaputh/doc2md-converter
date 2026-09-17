@@ -18,6 +18,7 @@ function App() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [copiedBatchIndex, setCopiedBatchIndex] = useState(null);
   const [expandedBatchItems, setExpandedBatchItems] = useState({});
+  const [isCopiedAll, setIsCopiedAll] = useState(false);
   
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -203,6 +204,27 @@ function App() {
     saveAs(content, 'extracted_markdowns.zip');
   };
 
+  const getMergedContent = () => {
+    return batchResults
+      .filter(res => res.success)
+      .map(res => `\n\n# ==========================================\n# 📄 DOCUMENT: ${res.filename}\n# ==========================================\n\n${res.content}`)
+      .join('\n\n');
+  };
+
+  const copyAllMerged = () => {
+    const merged = getMergedContent();
+    navigator.clipboard.writeText(merged).then(() => {
+      setIsCopiedAll(true);
+      setTimeout(() => setIsCopiedAll(false), 2000);
+    });
+  };
+
+  const downloadAllMerged = () => {
+    const merged = getMergedContent();
+    const blob = new Blob([merged], { type: 'text/markdown' });
+    saveAs(blob, 'merged_documents.md');
+  };
+
   const handleReset = () => {
     setFiles([]); setMarkdown(''); setErrorMessage(null); setOriginalFilename('');
     setBatchResults([]); setShowBatchModal(false);
@@ -374,9 +396,23 @@ function App() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-              <button onClick={() => setShowBatchModal(false)} style={{ backgroundColor: 'transparent', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>Close</button>
-              <button onClick={downloadAllAsZip} className="primary">Download All as .ZIP</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+              
+              {/* Tombol Merge Baru di Sebelah Kiri */}
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button onClick={copyAllMerged} style={{ backgroundColor: 'var(--surface-code)', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>
+                  {isCopiedAll ? '✅ All Copied!' : '📋 Copy All (Merged)'}
+                </button>
+                <button onClick={downloadAllMerged} style={{ backgroundColor: 'var(--surface-code)', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>
+                  📄 Save as Single .md
+                </button>
+              </div>
+
+              {/* Tombol Lama di Sebelah Kanan */}
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button onClick={() => setShowBatchModal(false)} style={{ backgroundColor: 'transparent', color: 'var(--text-main)', border: 'none', cursor: 'pointer' }}>Close</button>
+                <button onClick={downloadAllAsZip} className="primary">Download .ZIP</button>
+              </div>
             </div>
           </div>
         </div>
