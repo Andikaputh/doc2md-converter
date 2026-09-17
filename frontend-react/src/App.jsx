@@ -20,6 +20,7 @@ function App() {
   const [expandedBatchItems, setExpandedBatchItems] = useState({});
   const [isCopiedAll, setIsCopiedAll] = useState(false);
   const [customPrompt, setCustomPrompt] = useState('');
+  const [markdownTemplate, setMarkdownTemplate] = useState('standard');
   
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -210,14 +211,24 @@ function App() {
   };
 
   const getMergedContent = () => {
-    const mergedDocs = batchResults
+    let mergedDocs = batchResults
       .filter(res => res.success)
-      .map(res => `\n\n# ==========================================\n# 📄 DOCUMENT: ${res.filename}\n# ==========================================\n\n${res.content}`)
+      .map(res => {
+        let content = res.content;
+        
+        // Modifikasi isi berdasarkan template yang dipilih
+        if (markdownTemplate === 'qa') {
+          content = `### Source: ${res.filename}\n\n**Q: Apa poin inti atau ringkasan dari dokumen ini?**\nA:\n${content}\n\n**Q: Apa potensi pertanyaan/tindak lanjut dari dokumen ini?**\nA:\n- `;
+        } else if (markdownTemplate === 'summary') {
+          content = `## Executive Summary: ${res.filename}\n> *Ringkasan otomatis berdasarkan dokumen sumber.*\n\n${content}`;
+        }
+        
+        return `\n\n# ==========================================\n# 📄 DOCUMENT: ${res.filename}\n# ==========================================\n\n${content}`;
+      })
       .join('\n\n');
       
-    // Jika ada instruksi khusus, letakkan di paling atas sebagai System Prompt
     if (customPrompt.trim()) {
-      return `### INSTRUCTIONS ###\n${customPrompt.trim()}\n\n### KNOWLEDGE BASE ###${mergedDocs}`;
+      mergedDocs = `### INSTRUCTIONS ###\n${customPrompt.trim()}\n\n### KNOWLEDGE BASE ###${mergedDocs}`;
     }
     
     return mergedDocs;
@@ -443,6 +454,38 @@ function App() {
               <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 This instruction will be pinned to the top of your merged document when copied.
               </p>
+            </div>
+
+            {/* Pilihan Template Markdown */}
+            <div style={{ marginBottom: '1.5rem', backgroundColor: 'var(--surface-code)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
+                🎨 Output Structure Template
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {[
+                  { id: 'standard', label: 'Standard Raw' },
+                  { id: 'summary', label: 'Executive Summary' },
+                  { id: 'qa', label: 'Q&A Format' }
+                ].map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => setMarkdownTemplate(tpl.id)}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: markdownTemplate === tpl.id ? 'var(--accent)' : 'var(--bg-page)',
+                      color: markdownTemplate === tpl.id ? '#fff' : 'var(--text-main)',
+                      cursor: 'pointer',
+                      fontWeight: markdownTemplate === tpl.id ? 'bold' : 'normal'
+                    }}
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
