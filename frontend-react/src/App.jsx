@@ -33,33 +33,41 @@ function App() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFiles(Array.from(e.dataTransfer.files).slice(0, 10));
+      setFiles(Array.from(e.dataTransfer.files).slice(0, 10)); 
     }
   };
 
   const handleConvert = async () => {
     setErrorMessage(null);
-    if (files.length === 0) return setErrorMessage('Select documents first before extracting.');
 
-    const totalSize = files.reduce((acc, file) => acc + file.size, 0);
-    if (totalSize > 100 * 1024 * 1024) return setErrorMessage('Total file size is too large. Maximum 100MB.');
+    if (files.length === 0) {
+      setErrorMessage('Select documents first before extracting.');
+      return;
+    }
+
+    // Mengembalikan fitur validasimu: Cek jika ADA file yang lebih dari 10MB
+    const oversizedFiles = files.filter(f => f.size > 10 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      setErrorMessage(`File terlalu besar: ${oversizedFiles.map(f => f.name).join(', ')}. Maksimal ukuran per file adalah 10MB.`);
+      return;
+    }
 
     setIsLoading(true);
     setMarkdown('');
-    setBatchResults([]);
+    setBatchResults([]); // Reset hasil batch
 
     try {
       if (files.length === 1) {
-        // --- MODE TUNGGAL (LIVE PREVIEW) ---
+        // --- MODE 1 FILE (LIVE PREVIEW) ---
         const singleFormData = new FormData();
         singleFormData.append('file', files[0]);
 
-        const response = await fetch('https://doc2md-api-d1ox.onrender.com/api/convert', {
+        const response = await fetch('http://localhost:8000/api/convert', { // Ganti URL localhost/produksi sesuai kebutuhan
           method: 'POST',
           body: singleFormData
         });
-        const data = await response.json();
 
+        const data = await response.json();
         if (response.ok) {
           setOriginalFilename(data.filename);
           setMarkdown(data.markdown_content);
@@ -67,11 +75,11 @@ function App() {
           setErrorMessage(`Extraction failed: ${data.detail}`);
         }
       } else {
-        // --- MODE BATCH (POP-UP PREVIEW) ---
+        // --- MODE BANYAK FILE (MODAL BATCH) ---
         const batchFormData = new FormData();
-        files.forEach(file => batchFormData.append('files', file));
+        files.forEach(f => batchFormData.append('files', f));
 
-        const response = await fetch('https://doc2md-api-d1ox.onrender.com/api/convert/batch', {
+        const response = await fetch('http://localhost:8000/api/convert/batch', {
           method: 'POST',
           body: batchFormData
         });
@@ -79,7 +87,7 @@ function App() {
         const data = await response.json();
         if (response.ok) {
           setBatchResults(data.results);
-          setShowBatchModal(true);
+          setShowBatchModal(true); // Tampilkan pop-up!
         } else {
           setErrorMessage(`Batch extraction failed: ${data.detail || 'Unknown error'}`);
         }
