@@ -46,7 +46,7 @@ async def check_file_size_limit(request: Request, call_next):
 md = MarkItDown()
 
 # --- RAM PROTECTION FOR FREE TIER ---
-MAX_CONCURRENT_PROCESSES = 2
+MAX_CONCURRENT_PROCESSES = 1
 semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSES)
 
 @app.get("/")
