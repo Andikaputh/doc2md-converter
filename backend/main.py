@@ -44,6 +44,10 @@ async def check_file_size_limit(request: Request, call_next):
 # Initialize MarkItDown instance
 md = MarkItDown()
 
+# --- RAM PROTECTION FOR FREE TIER ---
+MAX_CONCURRENT_PROCESSES = 2
+semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSES)
+
 @app.get("/")
 def health_check():
     return {"status": "Alive and kicking!", "service": "Doc2MD API"}
@@ -85,7 +89,8 @@ async def process_single_file(file: UploadFile):
         temp_file_path = tmp.name
         
     try:
-        result = await asyncio.to_thread(md.convert, temp_file_path)
+        async with semaphore:
+            result = await asyncio.to_thread(md.convert, temp_file_path)
         return {"success": True, "filename": f"{base_name}.md", "content": result.text_content}
     except Exception as e:
         return {"success": False, "filename": file.filename, "error": str(e)}
