@@ -9,6 +9,7 @@ import tempfile
 import shutil
 import io
 import zipfile
+import gc
 
 # Initialize FastAPI App
 app = FastAPI(
@@ -65,11 +66,17 @@ async def convert_document(file: UploadFile = File(...)):
     
     try:
         result = await asyncio.to_thread(md.convert, temp_file_path)
-        return {
+        response_data = {
             "success": True,
             "filename": file.filename,
             "markdown_content": result.text_content
         }
+        
+        # Remove the markitdown result object from memory and clear the RAM
+        del result
+        gc.collect()
+        
+        return response_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
     finally:
@@ -106,6 +113,15 @@ async def convert_batch_documents(files: List[UploadFile] = File(...)):
     # Process each file concurrently
     tasks = [process_single_file(f) for f in files]
     results = await asyncio.gather(*tasks)
-        
-    # Langsung kembalikan daftar hasil sebagai JSON, bukan ZIP
-    return {"success": True, "results": results}
+
+    # Bungkus hasil ke variabel final
+    response_data = {"success": True, "results": results}
+    
+    # Hapus referensi array berat dari memori secara manual
+    del tasks
+    del results
+    
+    # Paksa "tukang sapu" Python bekerja membuang memori yang tersisa detik ini juga
+    gc.collect()
+    
+    return response_data
