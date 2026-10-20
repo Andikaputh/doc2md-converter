@@ -4,16 +4,18 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import './index.css';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 function App() {
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  // State untuk mode tunggal
+  // State for single document mode
   const [markdown, setMarkdown] = useState('');
   const [originalFilename, setOriginalFilename] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   
-  // State untuk mode batch (Pop-up)
+  // State for batch document mode (Modal)
   const [batchResults, setBatchResults] = useState([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [copiedBatchIndex, setCopiedBatchIndex] = useState(null);
@@ -22,6 +24,7 @@ function App() {
   const [customPrompt, setCustomPrompt] = useState('');
   const [markdownTemplate, setMarkdownTemplate] = useState('standard');
   
+  // Drag-and-drop & UI feedback
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [addLlmContext, setAddLlmContext] = useState(true);
@@ -29,6 +32,19 @@ function App() {
   const [progressText, setProgressText] = useState('');
 
   const resultRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  const activeBlobUrlsRef = useRef([]);
+
+  // Cleanup on unmount: abort active fetch requests and revoke blob URLs
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      activeBlobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+      activeBlobUrlsRef.current = [];
+    };
+  }, []);
 
   // Word and token count estimation function
   const getStats = (text) => {
@@ -36,7 +52,7 @@ function App() {
     const words = text.trim().split(/\s+/).length;
     return {
       words: words,
-      tokens: Math.ceil(words * 1.3) // Rumus standar LLM
+      tokens: Math.ceil(words * 1.3) // LLM token rule of thumb
     };
   };
 
@@ -68,104 +84,162 @@ function App() {
       return;
     }
 
-    // Mengembalikan fitur validasimu: Cek jika ADA file yang lebih dari 10MB
+    // Validate maximum file size (10MB limit per file)
     const oversizedFiles = files.filter(f => f.size > 10 * 1024 * 1024);
     if (oversizedFiles.length > 0) {
-      setErrorMessage(`File terlalu besar: ${oversizedFiles.map(f => f.name).join(', ')}. Maksimal ukuran per file adalah 10MB.`);
+      setErrorMessage(`File too large: ${oversizedFiles.map(f => f.name).join(', ')}. Maximum size per file is 10MB.`);
       return;
     }
 
+    // Cancel any previous in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setIsLoading(true);
     setMarkdown('');
-    setBatchResults([]); // Reset hasil batch
+    setBatchResults([]);
     setExpandedBatchItems({});
-    setProgress(10);
-    setProgressText('Uploading files to server...');
+    setProgress(0);
 
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 85) {
-          setProgressText('Extracting documents... (This might take a moment)');
-          return prev; // Berhenti di 85% sampai server selesai merespons
-        }
-        return prev + 15; // Naik perlahan
-      });
-    }, 1000);
+    const totalFiles = files.length;
 
     try {
-      if (files.length === 1) {
-        // --- MODE 1 FILE (LIVE PREVIEW) ---
-        const singleFormData = new FormData();
-        singleFormData.append('file', files[0]);
+      if (totalFiles === 1) {
+        // ==========================================
+        // SINGLE FILE MODE (Direct Live Preview)
+        // ==========================================
+        const file = files[0];
+        setProgress(30);
+        setProgressText(`Uploading & extracting ${file.name}...`);
 
-        const response = await fetch('http://localhost:8000/api/convert', { // Ganti URL localhost/produksi sesuai kebutuhan
+        const singleFormData = new FormData();
+        singleFormData.append('file', file);
+
+        const response = await fetch(`${API_BASE_URL}/api/convert`, {
           method: 'POST',
-          body: singleFormData
+          body: singleFormData,
+          signal: abortControllerRef.current.signal
         });
 
-        const data = await response.json();
-        clearInterval(progressInterval); // Hentikan timer otomatis
-        setProgress(100);
-        setProgressText('Finalizing results...');
+        const data = await response.json().catch(() => ({
+          success: false,
+          error: `HTTP ${response.status}: ${response.statusText}`
+        }));
 
-        if (response.ok) {
-          setOriginalFilename(data.filename);
-          setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-          
-          // Suntikkan Metadata jika fitur aktif
-          let finalContent = data.markdown_content;
+        if (response.ok && data.success) {
+          setProgress(100);
+          setProgressText('Extraction completed!');
+          setOriginalFilename(data.filename || file.name);
+
+          let finalContent = data.markdown_content || data.content || '';
           if (addLlmContext) {
             const date = new Date().toISOString().split('T')[0];
-            finalContent = `> **Document Context for LLM**\n> Filename: \`${data.filename}\`\n> Extracted on: \`${date}\`\n\n---\n\n${finalContent}`;
+            finalContent = `> **Document Context for LLM**\n> Filename: \`${data.filename || file.name}\`\n> Extracted on: \`${date}\`\n\n---\n\n${finalContent}`;
           }
-          
+
           setMarkdown(finalContent);
+          setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         } else {
-          setErrorMessage(`Extraction failed: ${data.detail}`);
+          setErrorMessage(`Extraction failed: ${data.error || data.detail || 'Unknown server error'}`);
+          setProgress(0);
+          setProgressText('');
         }
       } else {
-        // --- MODE BANYAK FILE (MODAL BATCH) ---
-        const batchFormData = new FormData();
-        files.forEach(f => batchFormData.append('files', f));
+        // ==========================================
+        // BATCH MODE: Sequential Per-File Processing
+        // ==========================================
+        // Runs sequentially one file at a time to prevent RAM spikes on Render Free Tier (<400MB)
+        // and eliminate HTTP connection timeouts.
+        setProgressText(`Starting batch extraction (0 of ${totalFiles})...`);
+        const accumulatedResults = [];
 
-        const response = await fetch('http://localhost:8000/api/convert/batch', {
-          method: 'POST',
-          body: batchFormData
-        });
-        
-        const data = await response.json();
-        clearInterval(progressInterval); // Hentikan timer otomatis
-        setProgress(100);
-        setProgressText('Finalizing results...');
-        
-        if (response.ok) {
-          // Inject Metadata into all files in the batch
-          const processedResults = data.results.map(res => {
-            if (res.success && addLlmContext) {
-              const date = new Date().toISOString().split('T')[0];
-              res.content = `> **Document Context for LLM**\n> Filename: \`${res.filename}\`\n> Extracted on: \`${date}\`\n\n---\n\n${res.content}`;
+        for (let i = 0; i < totalFiles; i++) {
+          if (abortControllerRef.current?.signal.aborted) {
+            break;
+          }
+
+          const file = files[i];
+          const fileNum = i + 1;
+          setProgressText(`Extracting file ${fileNum} of ${totalFiles}: ${file.name}...`);
+
+          let itemResult;
+          try {
+            const singleFormData = new FormData();
+            singleFormData.append('file', file);
+
+            const response = await fetch(`${API_BASE_URL}/api/convert`, {
+              method: 'POST',
+              body: singleFormData,
+              signal: abortControllerRef.current.signal
+            });
+
+            const data = await response.json().catch(() => ({
+              success: false,
+              error: `HTTP ${response.status}: ${response.statusText}`
+            }));
+
+            if (response.ok && data.success) {
+              let finalContent = data.content || data.markdown_content || '';
+              if (addLlmContext) {
+                const date = new Date().toISOString().split('T')[0];
+                finalContent = `> **Document Context for LLM**\n> Filename: \`${data.filename || file.name}\`\n> Extracted on: \`${date}\`\n\n---\n\n${finalContent}`;
+              }
+
+              itemResult = {
+                success: true,
+                filename: data.filename || file.name,
+                content: finalContent
+              };
+            } else {
+              itemResult = {
+                success: false,
+                filename: file.name,
+                error: data.error || data.detail || 'Extraction failed'
+              };
             }
-            return res;
-          });
-          
-          setBatchResults(processedResults);
-          setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+          } catch (err) {
+            if (err.name === 'AbortError') {
+              break;
+            }
+            itemResult = {
+              success: false,
+              filename: file.name,
+              error: err.message || 'Connection lost / Network error'
+            };
+          }
+
+          // Store results incrementally in state so failed files don't lose previous results
+          accumulatedResults.push(itemResult);
+          setBatchResults([...accumulatedResults]);
+
+          // Dynamic percentage update (e.g. 1 of 5 = 20%, 2 of 5 = 40%)
+          const currentPercent = Math.round((fileNum / totalFiles) * 100);
+          setProgress(currentPercent);
+          setProgressText(`Completed ${fileNum} of ${totalFiles} (${itemResult.success ? 'Success' : 'Error'}: ${file.name})`);
+        }
+
+        // Finalize batch execution
+        if (!abortControllerRef.current?.signal.aborted && accumulatedResults.length > 0) {
+          setProgress(100);
+          setProgressText(`Batch extraction completed (${accumulatedResults.filter(r => r.success).length}/${totalFiles} successful).`);
           setShowBatchModal(true);
-        } else {
-          setErrorMessage(`Batch extraction failed: ${data.detail || 'Unknown error'}`);
+          setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         }
       }
     } catch (err) {
-      clearInterval(progressInterval);
-      setProgress(0);
-      setErrorMessage(`Connection lost: ${err.message}`);
+      if (err.name !== 'AbortError') {
+        setProgress(0);
+        setProgressText('');
+        setErrorMessage(`Connection lost: ${err.message}`);
+      }
     } finally {
-      clearInterval(progressInterval);
-      setTimeout(() => setIsLoading(false), 500);
+      setIsLoading(false);
     }
   };
 
-  // --- Fungsi Mode Tunggal ---
+  // --- Single Mode Helpers ---
   const handleCopy = () => {
     navigator.clipboard.writeText(markdown).then(() => {
       setIsCopied(true);
@@ -174,12 +248,12 @@ function App() {
   };
 
   const handleDownload = () => {
-    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
     const baseName = originalFilename.substring(0, originalFilename.lastIndexOf('.')) || originalFilename;
     saveAs(blob, `${baseName}.md`);
   };
 
-  // --- Fungsi Mode Batch ---
+  // --- Batch Mode Helpers ---
   const copyBatchItem = (content, index) => {
     navigator.clipboard.writeText(content).then(() => {
       setCopiedBatchIndex(index);
@@ -188,8 +262,9 @@ function App() {
   };
 
   const downloadBatchItem = (content, filename) => {
-    const blob = new Blob([content], { type: 'text/markdown' });
-    saveAs(blob, filename);
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const baseName = filename.substring(0, filename.lastIndexOf('.')) || filename;
+    saveAs(blob, `${baseName}.md`);
   };
 
   const toggleBatchItem = (index) => {
@@ -202,8 +277,12 @@ function App() {
   const downloadAllAsZip = async () => {
     const zip = new JSZip();
     batchResults.forEach(res => {
-      if (res.success) zip.file(res.filename, res.content);
-      else zip.file(`ERROR_${res.filename}.txt`, `Failed: ${res.error}`);
+      const baseName = res.filename.substring(0, res.filename.lastIndexOf('.')) || res.filename;
+      if (res.success) {
+        zip.file(`${baseName}.md`, res.content);
+      } else {
+        zip.file(`ERROR_${res.filename}.txt`, `Failed: ${res.error}`);
+      }
     });
     
     const content = await zip.generateAsync({ type: 'blob' });
@@ -216,11 +295,11 @@ function App() {
       .map(res => {
         let content = res.content;
         
-        // Modifikasi isi berdasarkan template yang dipilih
+        // Template formatting
         if (markdownTemplate === 'qa') {
-          content = `### Source: ${res.filename}\n\n**Q: Apa poin inti atau ringkasan dari dokumen ini?**\nA:\n${content}\n\n**Q: Apa potensi pertanyaan/tindak lanjut dari dokumen ini?**\nA:\n- `;
+          content = `### Source: ${res.filename}\n\n**Q: What is the summary / core point of this document?**\nA:\n${content}\n\n**Q: Follow-up questions & action items?**\nA:\n- `;
         } else if (markdownTemplate === 'summary') {
-          content = `## Executive Summary: ${res.filename}\n> *Ringkasan otomatis berdasarkan dokumen sumber.*\n\n${content}`;
+          content = `## Executive Summary: ${res.filename}\n> *Automatic summary based on source document.*\n\n${content}`;
         }
         
         return `\n\n# ==========================================\n# 📄 DOCUMENT: ${res.filename}\n# ==========================================\n\n${content}`;
@@ -244,14 +323,33 @@ function App() {
 
   const downloadAllMerged = () => {
     const merged = getMergedContent();
-    const blob = new Blob([merged], { type: 'text/markdown' });
+    const blob = new Blob([merged], { type: 'text/markdown;charset=utf-8' });
     saveAs(blob, 'merged_documents.md');
   };
 
+  // Safe reset: cancel active network operations, revoke blob URLs, and clear memory
   const handleReset = () => {
-    setFiles([]); setMarkdown(''); setErrorMessage(null); setOriginalFilename('');
-    setBatchResults([]); setShowBatchModal(false);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    activeBlobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    activeBlobUrlsRef.current = [];
+
+    setFiles([]);
+    setMarkdown('');
+    setErrorMessage(null);
+    setOriginalFilename('');
+    setBatchResults([]);
+    setShowBatchModal(false);
     setExpandedBatchItems({});
+    setProgress(0);
+    setProgressText('');
+    setIsLoading(false);
+    setIsCopied(false);
+    setIsCopiedAll(false);
+    setCopiedBatchIndex(null);
+
     const fileInput = document.querySelector('input[type="file"]');
     if (fileInput) fileInput.value = '';
   };
@@ -262,7 +360,7 @@ function App() {
         <h1>Document Extraction</h1>
         <p>Transform complex files into clean, LLM-ready markdown. Powered by MarkItDown & React.</p>
         
-        {/* Lencana Privasi */}
+        {/* Privacy Badge */}
         <div className="privacy-badge">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -293,7 +391,7 @@ function App() {
                     </span>
                     <button 
                       onClick={(e) => { 
-                        e.preventDefault(); // Mencegah klik men-trigger upload window
+                        e.preventDefault();
                         e.stopPropagation(); 
                         removeFile(index); 
                       }} 
@@ -312,7 +410,7 @@ function App() {
 
           <input type="file" multiple accept=".pdf,.docx,.pptx,.xlsx,.csv,.html,.json" onChange={handleFileChange} />
           
-          {/* Checkbox Konteks LLM (Hanya muncul jika ada file yang dipilih) */}
+          {/* LLM Context Toggle */}
           {files.length > 0 && (
             <label className="llm-toggle">
               <input 
@@ -324,12 +422,28 @@ function App() {
             </label>
           )}
 
-          <div className="toolbar" style={{ justifyContent: 'center', marginTop: '1rem', width: '100%' }}>
+          <div className="toolbar" style={{ justifyContent: 'center', marginTop: '1rem', width: '100%', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button className="primary" onClick={handleConvert} disabled={isLoading || files.length === 0}>
-              {isLoading ? 'Extracting...' : (files.length > 1 ? 'Preview Batch Extraction' : 'Extract Markdown')}
+              {isLoading ? 'Extracting...' : (files.length > 1 ? `Extract Batch (${files.length} files)` : 'Extract Markdown')}
             </button>
-            {(files.length > 0 || markdown) && !isLoading && (
-              <button onClick={handleReset} style={{ backgroundColor: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>Reset</button>
+            
+            {/* Safe Reset / Cancel Buttons */}
+            {isLoading && (
+              <button onClick={handleReset} style={{ backgroundColor: 'transparent', color: '#e53e3e', border: '1px solid #feb2b2' }}>
+                Cancel
+              </button>
+            )}
+
+            {(files.length > 0 || markdown || batchResults.length > 0) && !isLoading && (
+              <button onClick={handleReset} style={{ backgroundColor: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
+                Reset
+              </button>
+            )}
+
+            {batchResults.length > 0 && !showBatchModal && !isLoading && (
+              <button onClick={() => setShowBatchModal(true)} style={{ backgroundColor: 'var(--surface-code)', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>
+                View Batch Results ({batchResults.length})
+              </button>
             )}
           </div>
         </div>
@@ -347,8 +461,8 @@ function App() {
         )}
       </main>
       
-      {/* --- LIVE PREVIEW (TUNGGAL) --- */}
-      {markdown && !isLoading && files.length === 1 && (
+      {/* --- LIVE PREVIEW (SINGLE FILE) --- */}
+      {markdown && !isLoading && files.length <= 1 && (
         <section className="result-section" ref={resultRef}>
           <h2>Extraction Result</h2>
           <div className="preview-container">
@@ -363,8 +477,8 @@ function App() {
                   <button onClick={handleDownload}>Save as .md</button>
                 </div>
               </div>
-              <pre>{markdown}</pre> {/* <--- Penambahan <pre> yang sempat hilang */}
-            </div> {/* <--- Penambahan penutup </div> untuk raw-markdown */}
+              <pre>{markdown}</pre>
+            </div>
 
             <div className="rendered-markdown">
               <h3 className="preview-title">Live Preview</h3>
@@ -374,13 +488,20 @@ function App() {
         </section>
       )}
 
-      {/* --- POP-UP MODAL (BATCH) --- */}
+      {/* --- POP-UP MODAL (BATCH PREVIEW) --- */}
       {showBatchModal && (
         <div ref={resultRef} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '1rem' }}>
           <div style={{ backgroundColor: 'var(--bg-page)', borderRadius: '8px', padding: '2rem', width: '100%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', margin: 0 }}>Batch Results ({batchResults.length} files)</h2>
+              <div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', margin: 0 }}>
+                  Batch Results ({batchResults.length} files)
+                </h2>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {batchResults.filter(r => r.success).length} succeeded, {batchResults.filter(r => !r.success).length} failed
+                </span>
+              </div>
               <button onClick={() => setShowBatchModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0, color: 'var(--text-muted)' }}>&times;</button>
             </div>
 
@@ -388,10 +509,9 @@ function App() {
               {batchResults.map((res, index) => (
                 <div key={index} style={{ border: '1px solid var(--border-color)', borderRadius: '6px', overflow: 'hidden', backgroundColor: res.success ? 'transparent' : '#fdf2f2' }}>
                   
-                  {/* --- BAGIAN ATAS: Header Kotak (Selalu Tampil) --- */}
+                  {/* --- Card Header --- */}
                   <div style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
-                      {/* Tombol Panah Dropdown (Hanya muncul jika sukses) */}
                       {res.success && (
                         <button onClick={() => toggleBatchItem(index)} style={{ background: 'none', border: 'none', padding: '0.2rem', cursor: 'pointer', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <svg style={{ transform: expandedBatchItems[index] ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -401,7 +521,9 @@ function App() {
                       )}
                       
                       <div style={{ overflow: 'hidden' }}>
-                        <h4 style={{ margin: '0 0 0.25rem 0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{res.filename}</h4>
+                        <h4 style={{ margin: '0 0 0.25rem 0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {res.filename}
+                        </h4>
                         <span style={{ fontSize: '0.8rem', color: res.success ? 'var(--text-muted)' : '#9b2c2c', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                           {res.success ? (
                             <>
@@ -409,7 +531,9 @@ function App() {
                               <span>•</span>
                               <span style={{color: 'var(--accent)', fontWeight: 500}}>~{getStats(res.content).tokens} tokens</span>
                             </>
-                          ) : `Error: ${res.error}`}
+                          ) : (
+                            <span>Error: {res.error}</span>
+                          )}
                         </span>
                       </div>
                     </div>
@@ -426,10 +550,9 @@ function App() {
                     )}
                   </div>
 
-                  {/* --- BAGIAN BAWAH: Dropdown Preview (Disembunyikan) --- */}
+                  {/* --- Dropdown Preview --- */}
                   {res.success && expandedBatchItems[index] && (
                     <div style={{ borderTop: '1px solid var(--border-color)', padding: '1.5rem', backgroundColor: 'var(--surface-code)' }}>
-                      {/* Menggunakan ReactMarkdown agar desainnya sama rapinya dengan Live Preview utama */}
                       <div className="markdown-body" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                         <ReactMarkdown>{res.content}</ReactMarkdown>
                       </div>
@@ -440,7 +563,7 @@ function App() {
               ))}
             </div>
             
-            {/* Input Custom Prompt LLM */}
+            {/* Custom AI Prompt Input */}
             <div style={{ marginTop: '1rem', marginBottom: '1.5rem', backgroundColor: 'var(--surface-code)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
                 ⚡ Add AI Instructions (Optional)
@@ -456,7 +579,7 @@ function App() {
               </p>
             </div>
 
-            {/* Pilihan Template Markdown */}
+            {/* Markdown Template Selector */}
             <div style={{ marginBottom: '1.5rem', backgroundColor: 'var(--surface-code)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
                 🎨 Output Structure Template
@@ -488,9 +611,10 @@ function App() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+            {/* Modal Bottom Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
               
-              {/* Tombol Merge Baru di Sebelah Kiri */}
+              {/* Merge & Copy Controls */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button onClick={copyAllMerged} style={{ backgroundColor: 'var(--surface-code)', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>
                   {isCopiedAll ? '✅ All Copied!' : '📋 Copy All (Merged)'}
@@ -500,7 +624,7 @@ function App() {
                 </button>
               </div>
 
-              {/* Tombol Lama di Sebelah Kanan */}
+              {/* Close & ZIP Controls */}
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <button onClick={() => setShowBatchModal(false)} style={{ backgroundColor: 'transparent', color: 'var(--text-main)', border: 'none', cursor: 'pointer' }}>Close</button>
                 <button onClick={downloadAllAsZip} className="primary">Download .ZIP</button>
