@@ -6,6 +6,10 @@ import './index.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per document limit
+const WARN_FILE_SIZE = 8 * 1024 * 1024; // 8MB near-limit threshold
+const MAX_BATCH_FILES = 10;
+
 function App() {
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,9 +60,37 @@ function App() {
     };
   };
 
+  const validateAndSetFiles = (rawFiles, fileInputElement = null) => {
+    if (!rawFiles || rawFiles.length === 0) return;
+
+    // Strict pre-upload validation: 10MB per file
+    const oversizedFiles = rawFiles.filter(file => file.size > MAX_FILE_SIZE);
+    if (oversizedFiles.length > 0) {
+      if (oversizedFiles.length === 1) {
+        const file = oversizedFiles[0];
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        setErrorMessage(`File '${file.name}' exceeds the 10MB limit (Size: ${sizeMB} MB). Please upload files under 10MB.`);
+      } else {
+        const fileDetails = oversizedFiles
+          .map(f => `'${f.name}' (${(f.size / (1024 * 1024)).toFixed(2)} MB)`)
+          .join(', ');
+        setErrorMessage(`The following files exceed the 10MB limit: ${fileDetails}. Please upload files under 10MB.`);
+      }
+
+      // Reset file input element so user can re-select
+      if (fileInputElement) {
+        fileInputElement.value = '';
+      }
+      return;
+    }
+
+    setErrorMessage(null);
+    setFiles(rawFiles.slice(0, MAX_BATCH_FILES));
+  };
+
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFiles(Array.from(e.target.files).slice(0, 10));
+      validateAndSetFiles(Array.from(e.target.files), e.target);
     }
   };
 
@@ -68,7 +100,8 @@ function App() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFiles(Array.from(e.dataTransfer.files).slice(0, 10)); 
+      const fileInput = document.querySelector('input[type="file"]');
+      validateAndSetFiles(Array.from(e.dataTransfer.files), fileInput);
     }
   };
 
@@ -84,10 +117,12 @@ function App() {
       return;
     }
 
-    // Validate maximum file size (10MB limit per file)
-    const oversizedFiles = files.filter(f => f.size > 10 * 1024 * 1024);
+    // Validate maximum file size (10MB limit per file) - Defense in depth
+    const oversizedFiles = files.filter(f => f.size > MAX_FILE_SIZE);
     if (oversizedFiles.length > 0) {
-      setErrorMessage(`File too large: ${oversizedFiles.map(f => f.name).join(', ')}. Maximum size per file is 10MB.`);
+      const file = oversizedFiles[0];
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      setErrorMessage(`File '${file.name}' exceeds the 10MB limit (Size: ${sizeMB} MB). Please upload files under 10MB.`);
       return;
     }
 
@@ -360,13 +395,25 @@ function App() {
         <h1>Document Extraction</h1>
         <p>Transform complex files into clean, LLM-ready markdown. Powered by MarkItDown & React.</p>
         
-        {/* Privacy Badge */}
-        <div className="privacy-badge">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
-          100% Private. Processed in-memory & instantly deleted.
+        <div className="header-badges">
+          {/* Privacy Badge */}
+          <div className="privacy-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            100% Private. Processed in-memory & instantly deleted.
+          </div>
+
+          {/* Upload Limits Badge */}
+          <div className="limit-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            Max file size: 10MB per document | Max batch: 10 files
+          </div>
         </div>
       </header>
       
@@ -384,26 +431,43 @@ function App() {
             
             {files.length > 0 && (
               <div className="file-chip-container">
-                {files.map((f, index) => (
-                  <div key={index} className="file-chip">
-                    <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {f.name}
-                    </span>
-                    <button 
-                      onClick={(e) => { 
-                        e.preventDefault();
-                        e.stopPropagation(); 
-                        removeFile(index); 
-                      }} 
-                      title="Remove file"
+                {files.map((f, index) => {
+                  const isNearLimit = f.size > WARN_FILE_SIZE;
+                  const sizeMB = (f.size / (1024 * 1024)).toFixed(1);
+
+                  return (
+                    <div 
+                      key={index} 
+                      className={`file-chip ${isNearLimit ? 'near-limit' : ''}`}
+                      title={`${f.name} (${(f.size / (1024 * 1024)).toFixed(2)} MB)`}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                      <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {f.name}
+                      </span>
+                      {isNearLimit && (
+                        <span 
+                          className="file-size-tag warning" 
+                          title={`File size: ${(f.size / (1024 * 1024)).toFixed(2)} MB (near 10MB limit)`}
+                        >
+                          {sizeMB} MB
+                        </span>
+                      )}
+                      <button 
+                        onClick={(e) => { 
+                          e.preventDefault();
+                          e.stopPropagation(); 
+                          removeFile(index); 
+                        }} 
+                        title="Remove file"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
