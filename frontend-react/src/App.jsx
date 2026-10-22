@@ -8,6 +8,7 @@ import {
   checkBackendHealth,
   getConnectionErrorMessage,
   isGatewayError,
+  isLocalApi,
   isNetworkError,
 } from './api';
 import './index.css';
@@ -173,16 +174,6 @@ function App() {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
       setErrorMessage(`File '${file.name}' exceeds the 10MB limit (Size: ${sizeMB} MB). Please upload files under 10MB.`);
       return;
-    }
-
-    // Make sure the backend is reachable before uploading anything, so the
-    // user gets one clear message instead of a per-file "Failed to fetch".
-    if (backendStatus !== 'online') {
-      const online = await probeBackend();
-      if (!online) {
-        setErrorMessage(getConnectionErrorMessage(new TypeError('Failed to fetch')));
-        return;
-      }
     }
 
     // Cancel any previous in-flight requests
@@ -526,15 +517,29 @@ function App() {
       {backendStatus === 'offline' && (
         <div className="server-offline-banner" role="alert">
           <div className="server-offline-text">
-            <strong>Conversion server is offline.</strong>
-            <p>
-              This app needs the FastAPI backend to convert documents. Start it in a terminal:
-            </p>
-            <code>cd backend &amp;&amp; python -m uvicorn main:app --reload</code>
-            <p className="server-offline-hint">
-              API target: <code>{API_BASE_URL || 'same origin (Vite proxy)'}</code>
-              {API_BASE_URL ? ' — change it with VITE_API_BASE_URL when deploying.' : ''}
-            </p>
+            {isLocalApi ? (
+              <>
+                <strong>Conversion server is offline.</strong>
+                <p>
+                  This app needs the FastAPI backend to convert documents. Start it in a terminal:
+                </p>
+                <code>cd backend &amp;&amp; python -m uvicorn main:app --reload</code>
+                <p className="server-offline-hint">
+                  API target: <code>{API_BASE_URL}</code>
+                </p>
+              </>
+            ) : (
+              <>
+                <strong>Conversion server is waking up.</strong>
+                <p>
+                  Free hosting sleeps after a period of inactivity. The first request can take
+                  30–60 seconds — retry in a moment, or just try converting.
+                </p>
+                <p className="server-offline-hint">
+                  API target: <code>{API_BASE_URL}</code>
+                </p>
+              </>
+            )}
           </div>
           <button type="button" className="retry-button" onClick={retryConnection}>
             Retry connection

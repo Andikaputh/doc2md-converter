@@ -304,16 +304,29 @@ The frontend talks to FastAPI through `VITE_API_BASE_URL`:
 
 * **Local development (`npm run dev`)** — leave the variable empty. Vite proxies
   `/api/*` to `http://localhost:8000` (see `frontend-react/vite.config.js`).
-* **Production (Vercel, Netlify, ...)** — set it to your deployed backend URL,
-  for example `VITE_API_BASE_URL=https://your-backend.onrender.com`, then
-  redeploy. In Vercel this lives in **Project → Settings → Environment
-  Variables**.
+* **Production (Vercel, Netlify, ...)** — `frontend-react/.env.production`
+  already points to the deployed Render backend:
+  `https://doc2md-api-d1ox.onrender.com`. Vite embeds this value at build time,
+  so the public site no longer depends on `localhost`.
 
-If the variable is not set in a production build, the frontend falls back to
-`http://localhost:8000`. That is why a deployed site shows *“Cannot reach the
-conversion server”* whenever the visitor's own computer is not running the
-backend. A public deployment also needs the FastAPI backend hosted somewhere
-(Render, Railway, Fly.io, a VPS, ...).
+You can also override it in **Vercel → Project → Settings → Environment
+Variables** (`VITE_API_BASE_URL`); environment variables take precedence over
+`.env.production`. Redeploy after changing it.
+
+### Keeping the free Render backend awake
+
+Render's free instance sleeps after ~15 minutes without traffic, so the first
+request can take 30–60 seconds. Two options:
+
+* **Free:** create a monitor at [cron-job.org](https://cron-job.org) (or
+  UptimeRobot) that calls `https://doc2md-api-d1ox.onrender.com/api/health`
+  every 10 minutes. One free instance allows 750 hours/month, enough to stay up
+  ~24/7.
+* **Paid:** upgrade the Render instance to a paid plan, which never sleeps.
+
+If the backend URL changes, update `frontend-react/.env.production` (or the
+Vercel environment variable) and redeploy.
+
 
 ---
 
