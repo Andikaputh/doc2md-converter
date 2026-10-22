@@ -55,6 +55,11 @@ semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSES)
 def health_check():
     return {"status": "Alive and kicking!", "service": "Doc2MD API"}
 
+@app.get("/api/health")
+def api_health():
+    """Lightweight endpoint used by the frontend to detect whether this API is reachable."""
+    return {"status": "ok", "service": "Doc2MD API"}
+
 async def process_single_file(file: UploadFile) -> dict:
     """Helper function to process a single file safely with strict memory limits and cleanup."""
     filename = file.filename or "uploaded_file"

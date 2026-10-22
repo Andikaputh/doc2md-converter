@@ -298,6 +298,47 @@ Users can access the application directly from a web browser without installing 
 
 For development purposes, the frontend and backend can still be run locally using the instructions provided in the [Getting Started](#-getting-started) section.
 
+### Backend URL configuration (important)
+
+The frontend talks to FastAPI through `VITE_API_BASE_URL`:
+
+* **Local development (`npm run dev`)** — leave the variable empty. Vite proxies
+  `/api/*` to `http://localhost:8000` (see `frontend-react/vite.config.js`).
+* **Production (Vercel, Netlify, ...)** — set it to your deployed backend URL,
+  for example `VITE_API_BASE_URL=https://your-backend.onrender.com`, then
+  redeploy. In Vercel this lives in **Project → Settings → Environment
+  Variables**.
+
+If the variable is not set in a production build, the frontend falls back to
+`http://localhost:8000`. That is why a deployed site shows *“Cannot reach the
+conversion server”* whenever the visitor's own computer is not running the
+backend. A public deployment also needs the FastAPI backend hosted somewhere
+(Render, Railway, Fly.io, a VPS, ...).
+
+---
+
+## Troubleshooting
+
+### "Connection lost: Failed to fetch" / "Conversion server is offline"
+
+This message means the browser could not reach the FastAPI backend. It is not a
+frontend bug — the conversion itself runs on the Python server.
+
+1. Start the backend:
+   ```bash
+   cd backend
+   python -m uvicorn main:app --reload
+   ```
+2. Confirm it responds by opening <http://localhost:8000/api/health>.
+3. Go back to the app tab and press **Retry connection** (the status badge in
+   the header should turn green).
+4. If you are using the deployed site, set `VITE_API_BASE_URL` to the public
+   backend URL and redeploy as explained above.
+
+The app now checks the backend automatically on load, when the tab regains
+focus, and before every conversion, so it can show a clear status instead of a
+raw `Failed to fetch` error.
+
 ---
 
 ## 📤 Upload to GitHub

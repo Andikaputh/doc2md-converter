@@ -1,10 +1,16 @@
 import ReactMarkdown from 'react-markdown';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import {
+  API_BASE_URL,
+  apiUrl,
+  checkBackendHealth,
+  getConnectionErrorMessage,
+  isGatewayError,
+  isNetworkError,
+} from './api';
 import './index.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per document limit
 const WARN_FILE_SIZE = 8 * 1024 * 1024; // 8MB near-limit threshold
@@ -35,9 +41,52 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
 
+  // Backend connectivity: 'checking' | 'online' | 'offline'
+  const [backendStatus, setBackendStatus] = useState('checking');
+
   const resultRef = useRef(null);
   const abortControllerRef = useRef(null);
   const activeBlobUrlsRef = useRef([]);
+
+  // Probe the backend without blocking the UI.
+  const probeBackend = useCallback(async () => {
+    const { online } = await checkBackendHealth();
+    setBackendStatus(online ? 'online' : 'offline');
+    return online;
+  }, []);
+
+  const retryConnection = () => {
+    setBackendStatus('checking');
+    probeBackend();
+  };
+
+  // Check once on load, then refresh when the tab regains focus or the
+  // browser comes back online (e.g. after the user starts the backend).
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshStatus = () => {
+      checkBackendHealth().then(({ online }) => {
+        if (!cancelled) setBackendStatus(online ? 'online' : 'offline');
+      });
+    };
+
+    refreshStatus();
+
+    const handleOnline = refreshStatus;
+    const handleVisibility = () => {
+      if (!document.hidden) refreshStatus();
+    };
+
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
 
   // Cleanup on unmount: abort active fetch requests and revoke blob URLs
   useEffect(() => {
@@ -126,6 +175,16 @@ function App() {
       return;
     }
 
+    // Make sure the backend is reachable before uploading anything, so the
+    // user gets one clear message instead of a per-file "Failed to fetch".
+    if (backendStatus !== 'online') {
+      const online = await probeBackend();
+      if (!online) {
+        setErrorMessage(getConnectionErrorMessage(new TypeError('Failed to fetch')));
+        return;
+      }
+    }
+
     // Cancel any previous in-flight requests
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -152,11 +211,22 @@ function App() {
         const singleFormData = new FormData();
         singleFormData.append('file', file);
 
-        const response = await fetch(`${API_BASE_URL}/api/convert`, {
+        const response = await fetch(apiUrl('/api/convert'), {
           method: 'POST',
           body: singleFormData,
           signal: abortControllerRef.current.signal
         });
+
+        // A 502/503/504 usually comes from a dev proxy or hosting gateway
+        // when the backend process is down: treat it as "server offline".
+        if (isGatewayError(response.status)) {
+          setBackendStatus('offline');
+          setErrorMessage(getConnectionErrorMessage(new TypeError('Failed to fetch')));
+          setProgress(0);
+          setProgressText('');
+          return;
+        }
+        setBackendStatus('online');
 
         const data = await response.json().catch(() => ({
           success: false,
@@ -189,6 +259,7 @@ function App() {
         // and eliminate HTTP connection timeouts.
         setProgressText(`Starting batch extraction (0 of ${totalFiles})...`);
         const accumulatedResults = [];
+        let stopBatch = false;
 
         for (let i = 0; i < totalFiles; i++) {
           if (abortControllerRef.current?.signal.aborted) {
@@ -204,11 +275,16 @@ function App() {
             const singleFormData = new FormData();
             singleFormData.append('file', file);
 
-            const response = await fetch(`${API_BASE_URL}/api/convert`, {
+            const response = await fetch(apiUrl('/api/convert'), {
               method: 'POST',
               body: singleFormData,
               signal: abortControllerRef.current.signal
             });
+
+            if (isGatewayError(response.status)) {
+              throw new TypeError('Failed to fetch');
+            }
+            setBackendStatus('online');
 
             const data = await response.json().catch(() => ({
               success: false,
@@ -238,10 +314,14 @@ function App() {
             if (err.name === 'AbortError') {
               break;
             }
+            if (isNetworkError(err)) {
+              setBackendStatus('offline');
+              stopBatch = true;
+            }
             itemResult = {
               success: false,
               filename: file.name,
-              error: err.message || 'Connection lost / Network error'
+              error: getConnectionErrorMessage(err)
             };
           }
 
@@ -253,13 +333,21 @@ function App() {
           const currentPercent = Math.round((fileNum / totalFiles) * 100);
           setProgress(currentPercent);
           setProgressText(`Completed ${fileNum} of ${totalFiles} (${itemResult.success ? 'Success' : 'Error'}: ${file.name})`);
+
+          // The backend is unreachable: do not hammer it with the remaining files
+          if (stopBatch) break;
         }
 
         // Finalize batch execution
         if (!abortControllerRef.current?.signal.aborted && accumulatedResults.length > 0) {
-          setProgress(100);
-          setProgressText(`Batch extraction completed (${accumulatedResults.filter(r => r.success).length}/${totalFiles} successful).`);
-          setShowBatchModal(true);
+          if (stopBatch) {
+            setProgressText(`Batch stopped: server unreachable after ${accumulatedResults.length} of ${totalFiles} files.`);
+            setShowBatchModal(true);
+          } else {
+            setProgress(100);
+            setProgressText(`Batch extraction completed (${accumulatedResults.filter(r => r.success).length}/${totalFiles} successful).`);
+            setShowBatchModal(true);
+          }
           setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         }
       }
@@ -267,7 +355,12 @@ function App() {
       if (err.name !== 'AbortError') {
         setProgress(0);
         setProgressText('');
-        setErrorMessage(`Connection lost: ${err.message}`);
+        if (isNetworkError(err)) {
+          setBackendStatus('offline');
+          setErrorMessage(getConnectionErrorMessage(err));
+        } else {
+          setErrorMessage(`Connection lost: ${err.message}`);
+        }
       }
     } finally {
       setIsLoading(false);
@@ -396,6 +489,19 @@ function App() {
         <p>Transform complex files into clean, LLM-ready markdown. Powered by MarkItDown & React.</p>
         
         <div className="header-badges">
+          {/* Backend connection status */}
+          <div
+            className={`server-status ${backendStatus}`}
+            title={`API endpoint: ${API_BASE_URL || 'same origin (Vite proxy)'}`}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="status-dot" />
+            {backendStatus === 'online' && 'Server connected'}
+            {backendStatus === 'offline' && 'Server offline'}
+            {backendStatus === 'checking' && 'Checking server...'}
+          </div>
+
           {/* Privacy Badge */}
           <div className="privacy-badge">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -417,6 +523,25 @@ function App() {
         </div>
       </header>
       
+      {backendStatus === 'offline' && (
+        <div className="server-offline-banner" role="alert">
+          <div className="server-offline-text">
+            <strong>Conversion server is offline.</strong>
+            <p>
+              This app needs the FastAPI backend to convert documents. Start it in a terminal:
+            </p>
+            <code>cd backend &amp;&amp; python -m uvicorn main:app --reload</code>
+            <p className="server-offline-hint">
+              API target: <code>{API_BASE_URL || 'same origin (Vite proxy)'}</code>
+              {API_BASE_URL ? ' — change it with VITE_API_BASE_URL when deploying.' : ''}
+            </p>
+          </div>
+          <button type="button" className="retry-button" onClick={retryConnection}>
+            Retry connection
+          </button>
+        </div>
+      )}
+
       {errorMessage && (
         <div className="error-banner">
           <span>{errorMessage}</span>
